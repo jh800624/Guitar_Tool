@@ -1185,7 +1185,7 @@ function buildVFNotes(measure,mi){
 }
 
 /* ── Cursor Overlay (uses getYForLine data) ── */
-function drawCursorOverlay(){
+function drawCursorOverlayLegacy(){
   const overlay=document.getElementById('cursorOverlay');
   overlay.innerHTML='';
   const svg=document.querySelector('#scoreContainer svg');
@@ -1230,6 +1230,20 @@ function drawCursorOverlay(){
   label.textContent=`M${tabCursor.m+1}  B${tabCursor.b+1}  ${['e','B','G','D','A','E'][tabCursor.s-1]}弦`;
   label.style.cssText=`left:${dotPt.x}px;top:${topPt.y-pad-22}px;`;
   overlay.appendChild(label);
+}
+
+function drawCursorOverlay(){
+  window.GuitarTool.renderCursorOverlay({
+    overlay:document.getElementById('cursorOverlay'),
+    scoreSvg:document.querySelector('#scoreContainer svg'),
+    scoreWrap:document.querySelector('.score-wrap'),
+    layout:{
+      measureLineIndex:_measureLineIdx,
+      staveStringYs:_staveStringYs,
+      notePositions:_notePositions.map(({mi,bi,x})=>({measureIndex:mi,beatIndex:bi,x}))
+    },
+    cursor:tabCursor
+  });
 }
 
 function refreshTabHeader(){
