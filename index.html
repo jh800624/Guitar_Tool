@@ -614,7 +614,9 @@ function collectMarkedState(){
 function renderChordChart(state,label){
   const fretted=state.map(s=>s.fret).filter(f=>f!==null&&f>0);
   const hasOpen=state.some(s=>s.fret===0);
-  let winStart=fretted.length?Math.min(...fretted):0;
+  // Open-string chord diagrams always start at fret 1. Otherwise G and Em
+  // incorrectly draw fret 2 as the first row below the nut.
+  let winStart=hasOpen?1:(fretted.length?Math.min(...fretted):1);
   let winEnd=fretted.length?Math.max(...fretted):0;
   const winFrets=Math.max(3,winEnd-winStart+1);
   const W=200,H=220,pad=18;
