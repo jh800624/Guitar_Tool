@@ -7,5 +7,7 @@ import { storage } from './core/storage.js';
 import * as audio from './core/audio.js';
 import { createCommandHistory } from './core/command-history.js';
 import { createDebouncedWriter } from './core/debounced-writer.js';
+import { createRenderScheduler } from './features/tab/render-scheduler.js';
+import { bindTabKeyboard } from './features/tab/keyboard-input.js';
 
-window.GuitarTool = Object.freeze({ theory, tabModel, scoreDocument, storage, audio, createCommandHistory, createDebouncedWriter });
+window.GuitarTool = Object.freeze({ theory, tabModel, scoreDocument, storage, audio, createCommandHistory, createDebouncedWriter, createRenderScheduler, bindTabKeyboard });

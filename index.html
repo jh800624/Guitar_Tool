@@ -814,7 +814,6 @@ function calcStaveW(measure, isFirst) {
 }
 
 let tabMeasures = [], tabCursor = {m:0,b:0,s:1}, tabSelectedDur = 'q';
-let fretBuffer = '', fretTimer = null;
 let _notePositions = [], _staveStringYs = {}, _measureLineIdx = {};
 
 function makeBeat(dur){ return {duration:dur||tabSelectedDur, strings:[], technique:null, isRest:false}; }
@@ -997,10 +996,9 @@ function loadTabStore(){
 }
 
 /* ── VexFlow Renderer ── */
-let scoreRenderFrame=null;
+const scoreRenderScheduler=window.GuitarTool.createRenderScheduler(renderScore);
 function requestScoreRender(){
-  if(scoreRenderFrame!==null)return;
-  scoreRenderFrame=requestAnimationFrame(()=>{scoreRenderFrame=null;renderScore();});
+  scoreRenderScheduler.request();
 }
 function renderScore(){
   if(!Vex){
@@ -1426,7 +1424,7 @@ document.getElementById('btnClearTech').addEventListener('click',()=>applyTechni
 
 document.getElementById('btnEnter').addEventListener('click',()=>{
   const f=parseInt(document.getElementById('fretInput').value.trim(),10);
-  if(!isNaN(f)&&f>=0&&f<=24){commitNote(f,false);document.getElementById('fretInput').value='';fretBuffer='';}
+  if(!isNaN(f)&&f>=0&&f<=24){commitNote(f,false);document.getElementById('fretInput').value='';}
   else setStatus('請輸入格數 0–24','warn');
 });
 document.getElementById('btnRest').addEventListener('click',()=>commitNote(0,true));
@@ -1445,7 +1443,7 @@ document.getElementById('btnClearAll').addEventListener('click',()=>{
   setTabMeasures([makeMeasure(document.getElementById('timeSigSel').value)]);
   recordMeasureReplacement(before,tabMeasures,'清除樂譜');
   tabCursor={m:0,b:0,s:1};
-  document.getElementById('fretInput').value='';fretBuffer='';
+  document.getElementById('fretInput').value='';
   requestScoreRender();updateCursorUI();saveTabStore();setStatus('已清除');
 });
 
@@ -1469,69 +1467,15 @@ document.getElementById('timeSigSel').addEventListener('change',()=>{
 });
 
 /* ── Keyboard ── */
-document.addEventListener('keydown',e=>{
-  const tag=e.target.tagName.toLowerCase();
-  const isFret=e.target.id==='fretInput';
-  const inText=(tag==='input'||tag==='select')&&!isFret;
-  // Only handle keyboard for TAB editor when that page is active
-  if(!document.getElementById('page-tab-editor').classList.contains('active'))return;
-  if(inText)return;
-
-  if(e.key===' '&&!isFret){ e.preventDefault(); _isPlaying?stopPlayback():startPlayback(); return; }
-  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='z'){
-    e.preventDefault();
-    if(e.shiftKey)redoTabEdit();else undoTabEdit();
-    return;
-  }
-  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='y'){e.preventDefault();redoTabEdit();return;}
-
-  if(e.key==='ArrowRight'){e.preventDefault();cursorNext();clampCursor();updateCursorUI();drawCursorOverlay();return;}
-  if(e.key==='ArrowLeft'){e.preventDefault();cursorPrev();clampCursor();updateCursorUI();drawCursorOverlay();return;}
-  if(e.key==='ArrowUp'){e.preventDefault();tabCursor.s=Math.max(1,tabCursor.s-1);updateCursorUI();drawCursorOverlay();return;}
-  if(e.key==='ArrowDown'){e.preventDefault();tabCursor.s=Math.min(6,tabCursor.s+1);updateCursorUI();drawCursorOverlay();return;}
-
-  if(e.key==='Enter'){
-    e.preventDefault();
-    const val=document.getElementById('fretInput').value.trim()||fretBuffer;
-    const fret=parseInt(val,10);
-    if(!isNaN(fret)&&fret>=0&&fret<=24){commitNote(fret,false);document.getElementById('fretInput').value='';fretBuffer='';clearTimeout(fretTimer);}
-    return;
-  }
-  if(e.key==='Delete'||(e.key==='Backspace'&&!isFret)){e.preventDefault();deleteCurrentNote();return;}
-  if(!isFret){
-    if(e.key==='h'){e.preventDefault();applyTechnique('h');return;}
-    if(e.key==='p'){e.preventDefault();applyTechnique('p');return;}
-    if(e.key==='s'){e.preventDefault();applyTechnique('slide_up');return;}
-    if(e.key==='b'){e.preventDefault();applyTechnique('bend');return;}
-    if(e.key==='~'){e.preventDefault();applyTechnique('vibrato');return;}
-    if(e.key==='x'){e.preventDefault();applyTechnique('mute');return;}
-    if(e.key==='r'||e.key==='R'){e.preventDefault();commitNote(0,true);return;}
-  }
-  if(!e.ctrlKey&&!e.metaKey&&!e.altKey&&/^[0-9]$/.test(e.key)&&!isFret){
-    e.preventDefault();
-    fretBuffer+=e.key;
-    document.getElementById('fretInput').value=fretBuffer;
-    clearTimeout(fretTimer);
-    if(fretBuffer.length>=2){
-      const fret=parseInt(fretBuffer,10);fretBuffer='';
-      if(fret>=0&&fret<=24){commitNote(fret,false);document.getElementById('fretInput').value='';}
-      else{setStatus('格數需介於 0–24','err');document.getElementById('fretInput').value='';fretBuffer='';}
-    }else{
-      fretTimer=setTimeout(()=>{
-        const fret=parseInt(fretBuffer,10);fretBuffer='';
-        if(!isNaN(fret)&&fret>=0&&fret<=24){commitNote(fret,false);document.getElementById('fretInput').value='';}
-      },800);
-    }
-  }
-});
-
-document.getElementById('fretInput').addEventListener('keydown',e=>{
-  if(e.key==='Enter'){
-    e.preventDefault();
-    const fret=parseInt(e.target.value.trim(),10);
-    if(!isNaN(fret)&&fret>=0&&fret<=24){commitNote(fret,false);e.target.value='';fretBuffer='';}
-    else setStatus('格數需介於 0–24','err');
-  }
+window.GuitarTool.bindTabKeyboard({
+  isActive:()=>document.getElementById('page-tab-editor').classList.contains('active'),
+  isFretInput:target=>target?.id==='fretInput',
+  isTextInput:target=>['input','select','textarea'].includes(target?.tagName?.toLowerCase()),
+  togglePlayback:()=>_isPlaying?stopPlayback():startPlayback(),
+  move:direction=>{direction==='next'?cursorNext():cursorPrev();clampCursor();updateCursorUI();drawCursorOverlay();},
+  setString:delta=>{tabCursor.s=Math.max(1,Math.min(6,tabCursor.s+delta));updateCursorUI();drawCursorOverlay();},
+  commitFret:fret=>commitNote(fret,false), rest:()=>commitNote(0,true), remove:deleteCurrentNote,
+  technique:applyTechnique, undo:undoTabEdit, redo:redoTabEdit, status:setStatus
 });
 
 window.addEventListener('resize',drawCursorOverlay);
