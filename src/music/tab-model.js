@@ -16,8 +16,11 @@ export function beatDuration(beat) {
   return beat.tuplet?.actual && beat.tuplet?.normal ? dotted * beat.tuplet.normal / beat.tuplet.actual : dotted;
 }
 
-export function canSetDuration(measure, beat, duration) {
-  return measureDuration(measure, beat) + DURATIONS[duration] <= measureCapacity(measure.timeSig) + 0.001;
+export function canSetDuration(measure, beat, durationOrBeat) {
+  const proposedBeat = typeof durationOrBeat === 'string'
+    ? { ...beat, duration: durationOrBeat }
+    : { ...beat, ...durationOrBeat };
+  return measureDuration(measure, beat) + beatDuration(proposedBeat) <= measureCapacity(measure.timeSig) + 0.001;
 }
 
 export function nextFittingDuration(remaining) {

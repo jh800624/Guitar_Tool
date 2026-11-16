@@ -88,7 +88,7 @@ function normalizeBeats(beats, timeSig) {
   })) : [];
   const capacity = measureCapacity(timeSig);
   const withinCapacity = [];
-  normalized.forEach((beat) => { if (measureDuration({ beats: withinCapacity }) + DURATIONS[beat.duration] <= capacity + .001) withinCapacity.push(beat); });
+  normalized.forEach((beat) => { if (measureDuration({ beats: withinCapacity }) + measureDuration({ beats: [beat] }) <= capacity + .001) withinCapacity.push(beat); });
   return withinCapacity.length ? withinCapacity : [createBeat()];
 }
 

@@ -1,4 +1,4 @@
-import { DURATIONS } from '../../music/tab-model.js';
+import { beatDuration } from '../../music/tab-model.js';
 
 export function createBeatTimeline({ measures, tuning, bpm, fromMeasure = 0, startTime = 0 }) {
   const secondsPerBeat = 60 / bpm;
@@ -7,9 +7,9 @@ export function createBeatTimeline({ measures, tuning, bpm, fromMeasure = 0, sta
   for (let measureIndex = fromMeasure; measureIndex < measures.length; measureIndex += 1) {
     for (let beatIndex = 0; beatIndex < measures[measureIndex].beats.length; beatIndex += 1) {
       const beat = measures[measureIndex].beats[beatIndex];
-      const duration = (DURATIONS[beat.duration] ?? 1) * secondsPerBeat;
+      const duration = beatDuration(beat) * secondsPerBeat;
       const notes = !beat.isRest && beat.technique !== 'mute'
-        ? beat.strings.map((note) => tuning[note.string - 1] + note.fret).filter(Number.isFinite) : [];
+        ? (beat.strings ?? []).map((note) => tuning[note.string - 1] + note.fret).filter(Number.isFinite) : [];
       timeline.push({ time, duration, measureIndex, beatIndex, notes });
       time += duration;
     }

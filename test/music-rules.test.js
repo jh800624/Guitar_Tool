@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { analyseChord, noteName } from '../src/music/theory.js';
-import { canSetDuration, measureCapacity, validateTabDocument } from '../src/music/tab-model.js';
+import { beatDuration, canSetDuration, measureCapacity, measureDuration, validateTabDocument } from '../src/music/tab-model.js';
 import { activeTrack, addTrack, createScoreDocument, migrateStoredTab, setActiveTrack, validateScoreDocument, voiceBeats } from '../src/music/score-document.js';
 import { createCommandHistory } from '../src/core/command-history.js';
 import { createDebouncedWriter } from '../src/core/debounced-writer.js';
@@ -53,6 +53,19 @@ test('playback timeline observes tempo, rests, mutes and string tuning', () => {
   assert.equal(endTime, 1.25);
 });
 
+test('dotted and tuplet notes share timing rules across the score and playback', () => {
+  const dottedQuarter = { duration: 'q', dots: 1 };
+  const tripletQuarter = { duration: 'q', tuplet: { actual: 3, normal: 2 } };
+  assert.equal(beatDuration(dottedQuarter), 1.5);
+  assert.ok(Math.abs(beatDuration(tripletQuarter) - (2 / 3)) < 0.0001);
+  assert.ok(Math.abs(measureDuration({ beats: [dottedQuarter, tripletQuarter] }) - (13 / 6)) < 0.0001);
+  const { events, endTime } = createBeatTimeline({
+    measures: [{ beats: [dottedQuarter, tripletQuarter] }], tuning: [64, 59, 55, 50, 45, 40], bpm: 120,
+  });
+  assert.equal(events[1].time, .75);
+  assert.ok(Math.abs(endTime - (13 / 12)) < 0.0001);
+});
+
 test('renderer layout wraps measures and records their line index without a browser', () => {
   const renderer = createScoreRenderer({ vf: {}, buildNotes: () => [], calcStaveWidth: () => 80,
     options: { maxWidth: 180, lineHeight: 100, clefWidth: 0, marginWidth: 0 } });
@@ -78,4 +91,5 @@ test('a measure cannot exceed its time signature', () => {
   assert.equal(measureCapacity('6/8'), 3);
   assert.equal(canSetDuration(measure, measure.beats[1], 'h'), false);
   assert.equal(validateTabDocument({ measures: [measure] }), true);
+  assert.equal(canSetDuration({ timeSig: '4/4', beats: [{ duration: 'h' }, { duration: 'q' }] }, { duration: 'q' }, { duration: 'q', dots: 1 }), false);
 });

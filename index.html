@@ -404,6 +404,11 @@
         <button class="dur-btn" data-dur="16"><span class="ds">𝅘𝅥𝅯</span><span class="dl">十六</span></button>
       </div>
       <div class="tbtn-row">
+        <button class="tbtn" id="btnDot">．附點</button>
+        <button class="tbtn" id="btnTie">⌒ Tie</button>
+        <button class="tbtn" id="btnTriplet">3 三連音</button>
+      </div>
+      <div class="tbtn-row">
         <button class="tbtn g" id="btnEnter">輸入</button>
         <button class="tbtn"   id="btnRest">休止</button>
         <button class="tbtn r" id="btnDelete">刪除</button>
@@ -813,7 +818,7 @@ const NOTE_W = { 'w':4, 'h':2, 'q':1, '8':0.5, '16':0.25 }; // beats per duratio
 
 // Calculate minimum width needed for a measure in quarter-beat units
 function measureMinBeats(measure) {
-  return measure.beats.reduce((s,b) => s + (NOTE_W[b.duration]||1), 0);
+  return measure.beats.reduce((s,b) => s + window.GuitarTool.tabModel.beatDuration(b), 0);
 }
 
 // Calculate px width for a measure given its content
@@ -829,7 +834,7 @@ function calcStaveW(measure, isFirst) {
 let tabMeasures = [], tabCursor = {m:0,b:0,s:1}, tabSelectedDur = 'q', tabVoice = 0;
 let _notePositions = [], _staveStringYs = {}, _measureLineIdx = {};
 
-function makeBeat(dur){ return {duration:dur||tabSelectedDur, strings:[], technique:null, isRest:false}; }
+function makeBeat(dur){ return {duration:dur||tabSelectedDur,dots:0,tie:false,tuplet:null,strings:[],technique:null,effects:[],isRest:false}; }
 function makeMeasure(ts){ return {timeSig:ts||'4/4', beats:[makeBeat('q')]}; }
 tabMeasures = [makeMeasure('4/4')];
 let scoreDocument=window.GuitarTool.scoreDocument.createScoreDocument({measures:tabMeasures});
@@ -952,7 +957,7 @@ function updateCursorUI(){
 function addBeatIfNeeded(){
   const m=tabMeasures[tabCursor.m];
   const cap=window.GuitarTool.tabModel.measureCapacity(m.timeSig);
-  const used=m.beats.reduce((s,b)=>s+DUR_BEATS[b.duration],0);
+  const used=window.GuitarTool.tabModel.measureDuration(m);
   if(tabCursor.b!==m.beats.length-1||used>=cap-.001)return;
   const nextDuration=window.GuitarTool.tabModel.nextFittingDuration(cap-used);
   if(nextDuration)m.beats.push(makeBeat(nextDuration));
@@ -1009,6 +1014,18 @@ function applyTechnique(tech){
   }
   finishTabEdit(tech===null?'清除技巧':'套用技巧');
   requestScoreRender();saveTabStore();
+}
+function toggleRhythmField(field,value,label){
+  const beat=tabMeasures[tabCursor.m].beats[tabCursor.b];
+  const enabled=field==='tuplet'?beat.tuplet?.actual===value.actual&&beat.tuplet?.normal===value.normal:beat[field]===value;
+  const nextValue=enabled?(field==='dots'?0:(field==='tie'?false:null)):value;
+  if(!window.GuitarTool.tabModel.canSetDuration(tabMeasures[tabCursor.m],beat,{[field]:nextValue})){
+    setStatus(`此設定會超過 ${tabMeasures[tabCursor.m].timeSig} 小節容量`,'warn');
+    return;
+  }
+  checkpointTabEdit();
+  beat[field]=nextValue;
+  finishTabEdit(label);requestScoreRender();saveTabStore();setStatus(label);
 }
 
 function addTabMeasure(){
@@ -1260,6 +1277,9 @@ document.querySelectorAll('.tech-btn[data-tech]').forEach(btn=>{
   btn.addEventListener('click',()=>applyTechnique(btn.dataset.tech));
 });
 document.getElementById('btnClearTech').addEventListener('click',()=>applyTechnique(null));
+document.getElementById('btnDot').addEventListener('click',()=>toggleRhythmField('dots',1,'切換附點'));
+document.getElementById('btnTie').addEventListener('click',()=>toggleRhythmField('tie',true,'切換 Tie'));
+document.getElementById('btnTriplet').addEventListener('click',()=>toggleRhythmField('tuplet',{actual:3,normal:2},'切換三連音'));
 
 document.getElementById('btnEnter').addEventListener('click',()=>{
   const f=parseInt(document.getElementById('fretInput').value.trim(),10);
