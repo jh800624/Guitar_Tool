@@ -10,5 +10,6 @@ import { createDebouncedWriter } from './core/debounced-writer.js';
 import { createRenderScheduler } from './features/tab/render-scheduler.js';
 import { bindTabKeyboard } from './features/tab/keyboard-input.js';
 import { createTabPlayback } from './features/tab/playback.js';
+import { createScoreRenderer } from './features/tab/score-renderer.js';
 
-window.GuitarTool = Object.freeze({ theory, tabModel, scoreDocument, storage, audio, createCommandHistory, createDebouncedWriter, createRenderScheduler, bindTabKeyboard, createTabPlayback });
+window.GuitarTool = Object.freeze({ theory, tabModel, scoreDocument, storage, audio, createCommandHistory, createDebouncedWriter, createRenderScheduler, bindTabKeyboard, createTabPlayback, createScoreRenderer });

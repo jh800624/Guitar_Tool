@@ -1000,9 +1000,9 @@ const scoreRenderScheduler=window.GuitarTool.createRenderScheduler(renderScore);
 function requestScoreRender(){
   scoreRenderScheduler.request();
 }
-function renderScore(){
+function renderScoreLegacy(){
   if(!Vex){
-    ensureNotation().then(renderScore).catch(err=>setStatus('樂譜引擎載入失敗：'+err.message,'err'));
+    ensureNotation().then(renderScoreLegacy).catch(err=>setStatus('樂譜引擎載入失敗：'+err.message,'err'));
     return;
   }
   _notePositions=[];_staveStringYs={};_measureLineIdx={};
@@ -1130,6 +1130,26 @@ function renderScore(){
     });
   });
 
+  refreshTabHeader();
+  requestAnimationFrame(drawCursorOverlay);
+}
+
+let tabScoreRenderer=null;
+function renderScore(){
+  if(!Vex){
+    ensureNotation().then(renderScore).catch(err=>setStatus('樂譜引擎載入失敗：'+err.message,'err'));
+    return;
+  }
+  tabScoreRenderer ??= window.GuitarTool.createScoreRenderer({
+    vf:Vex.Flow,
+    buildNotes:measure=>buildVFNotes(measure),
+    calcStaveWidth:calcStaveW,
+    options:{maxWidth:SCORE_W_MAX,lineHeight:LINE_H,clefWidth:CLEF_W,marginWidth:MARGIN_W}
+  });
+  const layout=tabScoreRenderer.render({container:document.getElementById('scoreContainer'),measures:tabMeasures,cursor:tabCursor});
+  _notePositions=layout.notePositions.map(({measureIndex,beatIndex,x})=>({mi:measureIndex,bi:beatIndex,x}));
+  _staveStringYs=layout.staveStringYs;
+  _measureLineIdx=layout.measureLineIndex;
   refreshTabHeader();
   requestAnimationFrame(drawCursorOverlay);
 }

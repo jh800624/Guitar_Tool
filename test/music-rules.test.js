@@ -6,6 +6,7 @@ import { createScoreDocument, migrateStoredTab, validateScoreDocument, voiceBeat
 import { createCommandHistory } from '../src/core/command-history.js';
 import { createDebouncedWriter } from '../src/core/debounced-writer.js';
 import { createBeatTimeline } from '../src/features/tab/playback.js';
+import { createScoreRenderer } from '../src/features/tab/score-renderer.js';
 
 test('C, E, G is recognised as C major', () => {
   assert.equal(analyseChord([0, 4, 7], 'C', 0).label, 'Cmaj');
@@ -50,6 +51,14 @@ test('playback timeline observes tempo, rests, mutes and string tuning', () => {
   assert.deepEqual(events.map((event) => event.notes), [[67], [], []]);
   assert.equal(events[1].time, .5);
   assert.equal(endTime, 1.25);
+});
+
+test('renderer layout wraps measures and records their line index without a browser', () => {
+  const renderer = createScoreRenderer({ vf: {}, buildNotes: () => [], calcStaveWidth: () => 80,
+    options: { maxWidth: 180, lineHeight: 100, clefWidth: 0, marginWidth: 0 } });
+  const result = renderer.layout([{ beats: [] }, { beats: [] }, { beats: [] }]);
+  assert.deepEqual(result.lines, [[0, 1], [2]]);
+  assert.equal(result.measureLineIndex[2], 1);
 });
 
 test('a measure cannot exceed its time signature', () => {
