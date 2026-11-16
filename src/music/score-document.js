@@ -4,11 +4,11 @@ export const SCORE_SCHEMA_VERSION = 2;
 export const STANDARD_GUITAR_TUNING = [64, 59, 55, 50, 45, 40];
 
 export function createBeat(duration = 'q') {
-  return { duration, strings: [], technique: null, isRest: false };
+  return { duration, dots: 0, tie: false, tuplet: null, strings: [], technique: null, effects: [], isRest: false };
 }
 
 export function createMeasure(timeSig = '4/4') {
-  return { timeSig, voices: [{ beats: [createBeat()] }] };
+  return { timeSig, repeatStart: false, repeatEnd: 0, tempoEvents: [], voices: [{ beats: [createBeat()] }] };
 }
 
 export function voiceBeats(measure, voiceIndex = 0) {
@@ -73,17 +73,17 @@ function normalizeMeasure(measure) {
   const timeSig = TIME_SIGNATURES.has(measure?.timeSig) ? measure.timeSig : '4/4';
   const sourceVoices = measure?.voices ?? [{ beats: measure?.beats }];
   const voices = sourceVoices.slice(0, 4).map((voice) => ({ beats: normalizeBeats(voice?.beats, timeSig) }));
-  const normalized = { timeSig, voices: voices.length ? voices : [{ beats: [createBeat()] }] };
+  const normalized = { timeSig, repeatStart: Boolean(measure?.repeatStart), repeatEnd: Number.isInteger(measure?.repeatEnd) ? measure.repeatEnd : 0, tempoEvents: Array.isArray(measure?.tempoEvents) ? measure.tempoEvents : [], voices: voices.length ? voices : [{ beats: [createBeat()] }] };
   normalized.beats = normalized.voices[0].beats; // Compatibility bridge while the editor moves to explicit voices.
   return normalized;
 }
 
 function normalizeBeats(beats, timeSig) {
   const normalized = Array.isArray(beats) ? beats.filter((beat) => DURATIONS[beat?.duration]).map((beat) => ({
-    duration: beat.duration,
+    duration: beat.duration, dots: Math.max(0, Math.min(3, Number(beat.dots) || 0)), tie: Boolean(beat.tie), tuplet: beat.tuplet && Number.isInteger(beat.tuplet.actual) && Number.isInteger(beat.tuplet.normal) ? { actual: beat.tuplet.actual, normal: beat.tuplet.normal } : null,
     strings: Array.isArray(beat.strings) ? beat.strings.filter((note) => Number.isInteger(note.string) && note.string >= 1 && note.string <= 10
       && Number.isInteger(note.fret) && note.fret >= 0 && note.fret <= 24) : [],
-    technique: typeof beat.technique === 'string' ? beat.technique : null,
+    technique: typeof beat.technique === 'string' ? beat.technique : null, effects: Array.isArray(beat.effects) ? beat.effects.filter(effect => typeof effect === 'string') : [],
     isRest: Boolean(beat.isRest),
   })) : [];
   const capacity = measureCapacity(timeSig);

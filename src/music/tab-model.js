@@ -7,7 +7,13 @@ export function measureCapacity(timeSignature) {
 }
 
 export function measureDuration(measure, exceptBeat = null) {
-  return measure.beats.reduce((total, beat) => total + (beat === exceptBeat ? 0 : DURATIONS[beat.duration]), 0);
+  return measure.beats.reduce((total, beat) => total + (beat === exceptBeat ? 0 : beatDuration(beat)), 0);
+}
+
+export function beatDuration(beat) {
+  const base = DURATIONS[beat.duration] ?? 1;
+  const dotted = base * (2 - (1 / (2 ** (Math.max(0, Math.min(3, beat.dots || 0))))));
+  return beat.tuplet?.actual && beat.tuplet?.normal ? dotted * beat.tuplet.normal / beat.tuplet.actual : dotted;
 }
 
 export function canSetDuration(measure, beat, duration) {
