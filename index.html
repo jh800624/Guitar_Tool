@@ -387,6 +387,9 @@
         <div class="cval"><span class="cl">BEAT</span><span class="cv" id="curB">1</span></div>
         <div class="cval"><span class="cl">STRING</span><span class="cv" id="curS">1</span></div>
       </div>
+      <div class="field"><label>聲部</label>
+        <select id="voiceSel"><option value="0">Voice 1</option><option value="1">Voice 2</option><option value="2">Voice 3</option><option value="3">Voice 4</option></select>
+      </div>
       <div class="fret-row">
         <label>格數</label>
         <input type="text" id="fretInput" placeholder="0" maxlength="2" inputmode="numeric">
@@ -823,7 +826,7 @@ function calcStaveW(measure, isFirst) {
   return Math.round(minW + contentW);
 }
 
-let tabMeasures = [], tabCursor = {m:0,b:0,s:1}, tabSelectedDur = 'q';
+let tabMeasures = [], tabCursor = {m:0,b:0,s:1}, tabSelectedDur = 'q', tabVoice = 0;
 let _notePositions = [], _staveStringYs = {}, _measureLineIdx = {};
 
 function makeBeat(dur){ return {duration:dur||tabSelectedDur, strings:[], technique:null, isRest:false}; }
@@ -834,6 +837,11 @@ tabMeasures=window.GuitarTool.scoreDocument.activeTrack(scoreDocument).measures;
 
 function setTabMeasures(measures){
   tabMeasures=window.GuitarTool.scoreDocument.replaceActiveMeasures(scoreDocument,measures);
+}
+function activateVoice(voiceIndex){
+  tabVoice=voiceIndex;
+  tabMeasures.forEach(measure=>{measure.beats=window.GuitarTool.scoreDocument.voiceBeats(measure,tabVoice);});
+  clampCursor();updateCursorUI();requestScoreRender();saveTabStore();
 }
 function refreshTrackUI(){
   let track=window.GuitarTool.scoreDocument.activeTrack(scoreDocument);
@@ -849,7 +857,8 @@ function refreshTrackUI(){
 }
 function activateTrack(trackId){
   const track=window.GuitarTool.scoreDocument.setActiveTrack(scoreDocument,trackId);
-  tabMeasures=track.measures;tabCursor={m:0,b:0,s:1};
+  tabMeasures=track.measures;tabCursor={m:0,b:0,s:1};tabVoice=0;
+  document.getElementById('voiceSel').value='0';activateVoice(0);
   refreshTrackUI();clampCursor();requestScoreRender();updateCursorUI();saveTabStore();
 }
 function restoreTracks(tracks,activeTrackId){
@@ -1266,6 +1275,7 @@ document.getElementById('btnPDF').addEventListener('click', exportPDF);
 document.getElementById('btnUndo').addEventListener('click',undoTabEdit);
 document.getElementById('btnRedo').addEventListener('click',redoTabEdit);
 document.getElementById('trackSel').addEventListener('change',event=>activateTrack(event.target.value));
+document.getElementById('voiceSel').addEventListener('change',event=>activateVoice(Number(event.target.value)));
 document.getElementById('btnAddTrack').addEventListener('click',addGuitarTrack);
 document.getElementById('btnDeleteTrack').addEventListener('click',deleteActiveTrack);
 document.getElementById('trackName').addEventListener('input',event=>{
