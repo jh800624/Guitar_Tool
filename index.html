@@ -831,21 +831,38 @@ function syncScoreMetadata(){
   scoreDocument.metadata.artist=document.getElementById('artistName').value||'';
   scoreDocument.metadata.bpm=Number(document.getElementById('bpmInput').value)||120;
 }
-function restoreTabSnapshot(serialized){
-  const restored=JSON.parse(serialized);
-  scoreDocument=restored.score;
-  tabMeasures=window.GuitarTool.scoreDocument.activeTrack(scoreDocument).measures;
-  tabCursor=restored.cursor;
-  document.getElementById('songTitle').value=scoreDocument.metadata.title||'Untitled';
-  document.getElementById('artistName').value=scoreDocument.metadata.artist||'';
-  document.getElementById('bpmInput').value=scoreDocument.metadata.bpm||120;
-  clampCursor();renderScore();updateCursorUI();refreshTabHeader();saveTabStore();updateHistoryUI();
+const cloneTabValue=value=>structuredClone(value);
+let pendingMeasureEdit=null;
+const tabHistory=window.GuitarTool.createCommandHistory({onChange:updateHistoryUI});
+function afterHistoryRestore(){
+  clampCursor();requestScoreRender();updateCursorUI();refreshTabHeader();saveTabStore();
 }
-const tabHistory=window.GuitarTool.createHistory({
-  snapshot:()=>{syncScoreMetadata();return JSON.stringify({score:scoreDocument,cursor:tabCursor});},
-  restore:restoreTabSnapshot
-});
-function checkpointTabEdit(){tabHistory.checkpoint();updateHistoryUI();}
+function checkpointTabEdit(){
+  pendingMeasureEdit={index:tabCursor.m,before:cloneTabValue(tabMeasures[tabCursor.m])};
+}
+function finishTabEdit(label='編輯音符'){
+  if(!pendingMeasureEdit)return;
+  const {index,before}=pendingMeasureEdit;
+  const after=cloneTabValue(tabMeasures[index]);
+  pendingMeasureEdit=null;
+  if(JSON.stringify(before)===JSON.stringify(after))return;
+  tabHistory.push({label,undo:()=>{tabMeasures[index]=cloneTabValue(before);afterHistoryRestore();},redo:()=>{tabMeasures[index]=cloneTabValue(after);afterHistoryRestore();}});
+}
+function recordMeasureInsert(index,measure){
+  const snapshot=cloneTabValue(measure);
+  tabHistory.push({label:'新增小節',undo:()=>{tabMeasures.splice(index,1);afterHistoryRestore();},redo:()=>{tabMeasures.splice(index,0,cloneTabValue(snapshot));afterHistoryRestore();}});
+}
+function recordMeasureDelete(index,measure){
+  const snapshot=cloneTabValue(measure);
+  tabHistory.push({label:'刪除小節',undo:()=>{tabMeasures.splice(index,0,cloneTabValue(snapshot));afterHistoryRestore();},redo:()=>{tabMeasures.splice(index,1);afterHistoryRestore();}});
+}
+function recordMeasureReplacement(before,after,label){
+  tabHistory.push({
+    label,
+    undo:()=>{tabMeasures.splice(0,tabMeasures.length,...cloneTabValue(before));afterHistoryRestore();},
+    redo:()=>{tabMeasures.splice(0,tabMeasures.length,...cloneTabValue(after));afterHistoryRestore();}
+  });
+}
 function updateHistoryUI(){
   document.getElementById('btnUndo').disabled=!tabHistory.canUndo;
   document.getElementById('btnRedo').disabled=!tabHistory.canRedo;
@@ -903,9 +920,10 @@ function commitNote(fret,isRest){
   }
   setStatus(isRest?`休止符 @ M${tabCursor.m+1}B${tabCursor.b+1}`:`弦${tabCursor.s}品${fret} @ M${tabCursor.m+1}B${tabCursor.b+1}`);
   addBeatIfNeeded();
+  finishTabEdit(isRest?'輸入休止符':'輸入音符');
   cursorNext();
   clampCursor();
-  renderScore();
+  requestScoreRender();
   updateCursorUI();
   saveTabStore();
 }
@@ -915,7 +933,8 @@ function deleteCurrentNote(){
   const beat=tabMeasures[tabCursor.m].beats[tabCursor.b];
   beat.strings=beat.strings.filter(n=>n.string!==tabCursor.s);
   if(!beat.strings.length)beat.isRest=true;
-  renderScore();updateCursorUI();saveTabStore();setStatus('已刪除');
+  finishTabEdit('刪除音符');
+  requestScoreRender();updateCursorUI();saveTabStore();setStatus('已刪除');
 }
 
 function applyTechnique(tech){
@@ -931,29 +950,35 @@ function applyTechnique(tech){
     const nm={h:'Hammer-on',p:'Pull-off',slide_up:'Slide Up',slide_down:'Slide Down',bend:'Bend',vibrato:'Vibrato',mute:'Mute'};
     setStatus(`套用：${nm[tech]||tech}`);
   }
-  renderScore();saveTabStore();
+  finishTabEdit(tech===null?'清除技巧':'套用技巧');
+  requestScoreRender();saveTabStore();
 }
 
 function addTabMeasure(){
-  checkpointTabEdit();
-  tabMeasures.push(makeMeasure(document.getElementById('timeSigSel').value));
-  renderScore();updateCursorUI();saveTabStore();setStatus(`新增第${tabMeasures.length}小節`);
+  const index=tabMeasures.length;
+  const measure=makeMeasure(document.getElementById('timeSigSel').value);
+  tabMeasures.push(measure);
+  recordMeasureInsert(index,measure);
+  requestScoreRender();updateCursorUI();saveTabStore();setStatus(`新增第${tabMeasures.length}小節`);
 }
 function deleteTabMeasure(){
   if(tabMeasures.length<=1){setStatus('至少保留一小節','warn');return;}
-  checkpointTabEdit();
-  tabMeasures.pop();
+  const index=tabMeasures.length-1;
+  const measure=tabMeasures.pop();
+  recordMeasureDelete(index,measure);
   if(tabCursor.m>=tabMeasures.length){tabCursor.m=tabMeasures.length-1;tabCursor.b=0;}
-  clampCursor();renderScore();updateCursorUI();saveTabStore();setStatus('已刪除最後一小節');
+  clampCursor();requestScoreRender();updateCursorUI();saveTabStore();setStatus('已刪除最後一小節');
 }
 
-const TAB_STORE_KEY='guitar-tool-tab-v1';
-function saveTabStore(){
+const tabPersistence=window.GuitarTool.createDebouncedWriter(()=>{
   try{
     syncScoreMetadata();
     const data={schemaVersion:2,score:scoreDocument};
     window.GuitarTool.storage.saveTab(data);
   }catch(e){/* A private-mode browser may not offer persistent storage. */}
+},{delay:700});
+function saveTabStore({flush=false}={}){
+  if(flush)tabPersistence.flush();else tabPersistence.schedule();
 }
 function loadTabStore(){
   try{
@@ -972,6 +997,11 @@ function loadTabStore(){
 }
 
 /* ── VexFlow Renderer ── */
+let scoreRenderFrame=null;
+function requestScoreRender(){
+  if(scoreRenderFrame!==null)return;
+  scoreRenderFrame=requestAnimationFrame(()=>{scoreRenderFrame=null;renderScore();});
+}
 function renderScore(){
   if(!Vex){
     ensureNotation().then(renderScore).catch(err=>setStatus('樂譜引擎載入失敗：'+err.message,'err'));
@@ -1411,11 +1441,12 @@ document.getElementById('btnRedo').addEventListener('click',redoTabEdit);
 
 document.getElementById('btnClearAll').addEventListener('click',()=>{
   if(!confirm('確定清除全部？'))return;
-  checkpointTabEdit();
+  const before=cloneTabValue(tabMeasures);
   setTabMeasures([makeMeasure(document.getElementById('timeSigSel').value)]);
+  recordMeasureReplacement(before,tabMeasures,'清除樂譜');
   tabCursor={m:0,b:0,s:1};
   document.getElementById('fretInput').value='';fretBuffer='';
-  renderScore();updateCursorUI();saveTabStore();setStatus('已清除');
+  requestScoreRender();updateCursorUI();saveTabStore();setStatus('已清除');
 });
 
 ['songTitle','artistName','bpmInput'].forEach(id=>{
@@ -1433,7 +1464,8 @@ document.getElementById('timeSigSel').addEventListener('change',()=>{
   checkpointTabEdit();
   measure.timeSig=next;
   addBeatIfNeeded();
-  renderScore();saveTabStore();
+  finishTabEdit('變更拍號');
+  requestScoreRender();saveTabStore();
 });
 
 /* ── Keyboard ── */
@@ -1453,10 +1485,10 @@ document.addEventListener('keydown',e=>{
   }
   if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='y'){e.preventDefault();redoTabEdit();return;}
 
-  if(e.key==='ArrowRight'){e.preventDefault();cursorNext();clampCursor();updateCursorUI();renderScore();return;}
-  if(e.key==='ArrowLeft'){e.preventDefault();cursorPrev();clampCursor();updateCursorUI();renderScore();return;}
-  if(e.key==='ArrowUp'){e.preventDefault();tabCursor.s=Math.max(1,tabCursor.s-1);updateCursorUI();renderScore();return;}
-  if(e.key==='ArrowDown'){e.preventDefault();tabCursor.s=Math.min(6,tabCursor.s+1);updateCursorUI();renderScore();return;}
+  if(e.key==='ArrowRight'){e.preventDefault();cursorNext();clampCursor();updateCursorUI();drawCursorOverlay();return;}
+  if(e.key==='ArrowLeft'){e.preventDefault();cursorPrev();clampCursor();updateCursorUI();drawCursorOverlay();return;}
+  if(e.key==='ArrowUp'){e.preventDefault();tabCursor.s=Math.max(1,tabCursor.s-1);updateCursorUI();drawCursorOverlay();return;}
+  if(e.key==='ArrowDown'){e.preventDefault();tabCursor.s=Math.min(6,tabCursor.s+1);updateCursorUI();drawCursorOverlay();return;}
 
   if(e.key==='Enter'){
     e.preventDefault();
@@ -1503,6 +1535,7 @@ document.getElementById('fretInput').addEventListener('keydown',e=>{
 });
 
 window.addEventListener('resize',drawCursorOverlay);
+window.addEventListener('pagehide',()=>saveTabStore({flush:true}));
 
 /* ── Init ── */
 window.addEventListener('load',()=>{
