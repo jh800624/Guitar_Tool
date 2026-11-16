@@ -19,7 +19,7 @@ export function createScoreRenderer({ vf, buildNotes, calcStaveWidth, options })
     return { lines, measureLineIndex, width: Math.min(maxWidth, Math.max(400, widest + 10)), height: lines.length * lineHeight + 30 };
   }
 
-  function render({ container, measures, cursor }) {
+  function render({ container, measures, cursor, activeVoice = 0 }) {
     const scoreLayout = layout(measures);
     container.innerHTML = '';
     const renderer = new Renderer(container, Renderer.Backends.SVG);
@@ -48,22 +48,25 @@ export function createScoreRenderer({ vf, buildNotes, calcStaveWidth, options })
         if (first) staveStringYs[lineIndex] = [0, 1, 2, 3, 4, 5].map((string) => stave.getYForLine(string));
         context.save(); context.setFont('Courier Prime, monospace', 8);
         context.setFillStyle(measureIndex === cursor.m ? '#888' : '#bbb'); context.fillText(`${measureIndex + 1}`, xOffset + 3, yBase - 2); context.restore();
-        const notes = buildNotes(measure);
+        const noteGroups = (measure.voices ?? [{ beats: measure.beats }]).map((_, voiceIndex) => buildNotes(measure, voiceIndex, voiceIndex % 2 ? -1 : 1));
         const innerWidth = staveWidth - (first ? clefWidth + 4 : marginWidth + 4);
         const noteStart = xOffset + (first ? clefWidth + 4 : marginWidth + 4);
-        if (notes.length) {
+        if (noteGroups.some((notes) => notes.length)) {
           try {
             const [beats, unit] = measure.timeSig.split('/').map(Number);
-            const voice = new Voice({ numBeats: beats, beatValue: unit });
-            voice.setMode(Voice.Mode.SOFT); voice.addTickables(notes);
-            new Formatter().joinVoices([voice]).format([voice], innerWidth); voice.draw(context, stave);
-            Beam.generateBeams(notes).forEach((beam) => beam.setContext(context).draw());
-            notes.forEach((note, beatIndex) => {
+            const voices = noteGroups.map((notes) => { const voice = new Voice({ numBeats: beats, beatValue: unit }); voice.setMode(Voice.Mode.SOFT); voice.addTickables(notes); return voice; });
+            new Formatter().joinVoices(voices).format(voices, innerWidth); voices.forEach((voice) => voice.draw(context, stave));
+            noteGroups.forEach((notes, voiceIndex) => {
+              Beam.generateBeams(notes).forEach((beam) => beam.setContext(context).draw());
+              if (voiceIndex !== activeVoice) return;
+              notes.forEach((note, beatIndex) => {
               const box = note.getBoundingBox?.();
               const x = note.getAbsoluteX?.() || (box ? box.getX() + box.getW() / 2 : noteStart + innerWidth / notes.length * (beatIndex + .5));
               notePositions.push({ measureIndex, beatIndex, x });
+              });
             });
           } catch {
+            const notes = noteGroups[activeVoice] ?? [];
             notes.forEach((_, beatIndex) => notePositions.push({ measureIndex, beatIndex, x: noteStart + innerWidth / notes.length * (beatIndex + .5) }));
           }
         }

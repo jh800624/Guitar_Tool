@@ -1070,7 +1070,7 @@ function renderScore(){
     calcStaveWidth:calcStaveW,
     options:{maxWidth:SCORE_W_MAX,lineHeight:LINE_H,clefWidth:CLEF_W,marginWidth:MARGIN_W}
   });
-  const layout=tabScoreRenderer.render({container:document.getElementById('scoreContainer'),measures:tabMeasures,cursor:tabCursor});
+  const layout=tabScoreRenderer.render({container:document.getElementById('scoreContainer'),measures:tabMeasures,cursor:tabCursor,activeVoice:tabVoice});
   _notePositions=layout.notePositions.map(({measureIndex,beatIndex,x})=>({mi:measureIndex,bi:beatIndex,x}));
   _staveStringYs=layout.staveStringYs;
   _measureLineIdx=layout.measureLineIndex;
@@ -1078,9 +1078,10 @@ function renderScore(){
   requestAnimationFrame(drawCursorOverlay);
 }
 
-function buildVFNotes(measure,mi){
+function buildVFNotes(measure,voiceIndex=tabVoice,stemDirection=1){
   const{TabNote,Annotation}=Vex.Flow;
-  return measure.beats.map((beat,bi)=>{
+  const beats=measure.voices?.[voiceIndex]?.beats??measure.beats;
+  return beats.map((beat,bi)=>{
     const positions=beat.isRest||!beat.strings.length
       ?[{str:3,fret:beat.isRest?'x':''}]
       :beat.strings.map(n=>({str:n.string,fret:n.technique==='mute'?'x':String(n.fret)}));
@@ -1090,11 +1091,11 @@ function buildVFNotes(measure,mi){
         positions:positions.length?positions:[{str:3,fret:'0'}],
         duration:beat.duration,
         draw_stem:true,
-        stem_direction:1
+        stem_direction:stemDirection
       });
     }
     catch(e){
-      note=new TabNote({positions:[{str:3,fret:'0'}],duration:'q',draw_stem:true,stem_direction:1});
+      note=new TabNote({positions:[{str:3,fret:'0'}],duration:'q',draw_stem:true,stem_direction:stemDirection});
     }
     if(beat.technique&&TECH_LABEL[beat.technique]){
       try{
