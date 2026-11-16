@@ -5,6 +5,7 @@ import { canSetDuration, measureCapacity, validateTabDocument } from '../src/mus
 import { createScoreDocument, migrateStoredTab, validateScoreDocument, voiceBeats } from '../src/music/score-document.js';
 import { createCommandHistory } from '../src/core/command-history.js';
 import { createDebouncedWriter } from '../src/core/debounced-writer.js';
+import { createBeatTimeline } from '../src/features/tab/playback.js';
 
 test('C, E, G is recognised as C major', () => {
   assert.equal(analyseChord([0, 4, 7], 'C', 0).label, 'Cmaj');
@@ -36,6 +37,19 @@ test('debounced persistence combines rapid edits into one write', async () => {
   writer.schedule(); writer.schedule(); writer.schedule();
   await new Promise((resolve) => setTimeout(resolve, 15));
   assert.equal(writes, 1);
+});
+
+test('playback timeline observes tempo, rests, mutes and string tuning', () => {
+  const { events, endTime } = createBeatTimeline({
+    measures: [{ beats: [
+      { duration: 'q', strings: [{ string: 1, fret: 3 }], isRest: false },
+      { duration: '8', strings: [{ string: 6, fret: 0 }], isRest: false, technique: 'mute' },
+      { duration: 'q', strings: [], isRest: true },
+    ] }], tuning: [64, 59, 55, 50, 45, 40], bpm: 120,
+  });
+  assert.deepEqual(events.map((event) => event.notes), [[67], [], []]);
+  assert.equal(events[1].time, .5);
+  assert.equal(endTime, 1.25);
 });
 
 test('a measure cannot exceed its time signature', () => {

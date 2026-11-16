@@ -1312,100 +1312,27 @@ async function exportPDF(){
 /* ════════════════════════════════════════════════════════
    TAB PLAYBACK ENGINE
 ════════════════════════════════════════════════════════ */
-const OPEN_STRINGS_MIDI = [64, 59, 55, 50, 45, 40]; // e B G D A E (string 1-6)
-const DUR_SEC = { 'w':4, 'h':2, 'q':1, '8':0.5, '16':0.25 };
-
-let _playScheduled = []; // list of AudioNode to stop
-let _playAnimFrame = null;
-let _isPlaying = false;
-
-function tabMidiToFreq(m){ return 440 * Math.pow(2, (m-69)/12); }
-
-function playTabNote(midi, startTime, duration, audioCtx){
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  // Pluck-like tone: mix of harmonics
-  const real = new Float32Array([0,1,0.5,0.25,0.1,0.05]);
-  const imag = new Float32Array(real.length);
-  osc.setPeriodicWave(audioCtx.createPeriodicWave(real, imag));
-  osc.frequency.setValueAtTime(tabMidiToFreq(midi), startTime);
-  // Envelope: sharp attack, quick decay (pluck feel)
-  gain.gain.setValueAtTime(0.001, startTime);
-  gain.gain.exponentialRampToValueAtTime(0.6, startTime + 0.01);
-  gain.gain.exponentialRampToValueAtTime(0.001, startTime + Math.min(duration * 0.9, 2.5));
-  osc.connect(gain);
-  gain.connect(audioCtx.destination);
-  osc.start(startTime);
-  osc.stop(startTime + Math.min(duration, 3));
-  _playScheduled.push(osc);
-}
-
-function stopPlayback(){
-  _isPlaying = false;
-  _playScheduled.forEach(n=>{ try{ n.stop(); }catch(e){} });
-  _playScheduled = [];
-  if(_playAnimFrame) cancelAnimationFrame(_playAnimFrame);
-  _playAnimFrame=null;
-  document.getElementById('btnPlay').disabled = false;
-  document.getElementById('btnStop').disabled = true;
-  setStatus('已停止');
-}
-
+const tabPlayback=window.GuitarTool.createTabPlayback({
+  getContext:()=>{ensureAudio();return audioCtx;},
+  pluck:(midi,start,duration)=>window.GuitarTool.audio.pluck(midi,start,duration),
+  onState:({playing,reason})=>{
+    document.getElementById('btnPlay').disabled=playing;
+    document.getElementById('btnStop').disabled=!playing;
+    if(!playing)setStatus(reason==='finished'?'播放完成':'已停止');
+  },
+  onBeat:({measureIndex,beatIndex})=>{
+    if(tabCursor.m===measureIndex&&tabCursor.b===beatIndex)return;
+    tabCursor.m=measureIndex;tabCursor.b=beatIndex;updateCursorUI();drawCursorOverlay();
+  }
+});
+function stopPlayback(){tabPlayback.stop();}
 function startPlayback(){
-  if(_isPlaying) stopPlayback();
-  ensureAudio();
-  if(audioCtx.state==='suspended')audioCtx.resume();
-  _isPlaying = true;
-  document.getElementById('btnPlay').disabled = true;
-  document.getElementById('btnStop').disabled = false;
-
-  const bpm = parseFloat(document.getElementById('bpmInput').value) || 120;
-  const secPerBeat = 60 / bpm;
+  const bpm=parseFloat(document.getElementById('bpmInput').value)||120;
   const requestedFrom=parseInt(document.getElementById('playFromM').value||'1',10);
   const fromM=Math.min(tabMeasures.length-1,Math.max(0,(Number.isFinite(requestedFrom)?requestedFrom:1)-1));
   document.getElementById('playFromM').value=fromM+1;
-
-  let t = audioCtx.currentTime + 0.05; // small offset to start
-  const beatTimings = []; // {time, mi, bi} for cursor sync
-
-  for(let mi = fromM; mi < tabMeasures.length; mi++){
-    const measure = tabMeasures[mi];
-    for(let bi = 0; bi < measure.beats.length; bi++){
-      const beat = measure.beats[bi];
-      const durSec = (DUR_SEC[beat.duration] || 1) * secPerBeat;
-      if(!beat.isRest && beat.technique!=='mute' && beat.strings.length > 0){
-        beat.strings.forEach(n => {
-          const midi = OPEN_STRINGS_MIDI[n.string - 1] + n.fret;
-          playTabNote(midi, t, durSec, audioCtx);
-        });
-      }
-      beatTimings.push({ time: t, mi, bi });
-      t += durSec;
-    }
-  }
-
-  const endTime = t;
-
-  // Cursor sync via rAF
-  function syncCursor(){
-    if(!_isPlaying) return;
-    const now = audioCtx.currentTime;
-    if(now >= endTime){ stopPlayback(); return; }
-    // Find current beat
-    let cur = beatTimings[0];
-    for(const bt of beatTimings){
-      if(bt.time <= now) cur = bt;
-      else break;
-    }
-    if(cur && (tabCursor.m !== cur.mi || tabCursor.b !== cur.bi)){
-      tabCursor.m = cur.mi;
-      tabCursor.b = cur.bi;
-      updateCursorUI();
-      drawCursorOverlay();
-    }
-    _playAnimFrame = requestAnimationFrame(syncCursor);
-  }
-  _playAnimFrame = requestAnimationFrame(syncCursor);
+  const tuning=window.GuitarTool.scoreDocument.activeTrack(scoreDocument).tuning;
+  tabPlayback.start({measures:tabMeasures,tuning,bpm,fromMeasure:fromM});
   setStatus(`播放中… BPM ${bpm}`);
 }
 
@@ -1471,7 +1398,7 @@ window.GuitarTool.bindTabKeyboard({
   isActive:()=>document.getElementById('page-tab-editor').classList.contains('active'),
   isFretInput:target=>target?.id==='fretInput',
   isTextInput:target=>['input','select','textarea'].includes(target?.tagName?.toLowerCase()),
-  togglePlayback:()=>_isPlaying?stopPlayback():startPlayback(),
+  togglePlayback:()=>tabPlayback.isPlaying?stopPlayback():startPlayback(),
   move:direction=>{direction==='next'?cursorNext():cursorPrev();clampCursor();updateCursorUI();drawCursorOverlay();},
   setString:delta=>{tabCursor.s=Math.max(1,Math.min(6,tabCursor.s+delta));updateCursorUI();drawCursorOverlay();},
   commitFret:fret=>commitNote(fret,false), rest:()=>commitNote(0,true), remove:deleteCurrentNote,
