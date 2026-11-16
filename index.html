@@ -395,6 +395,10 @@
         <button class="tbtn"   id="btnRest">休止</button>
         <button class="tbtn r" id="btnDelete">刪除</button>
       </div>
+      <div class="tbtn-row">
+        <button class="tbtn" id="btnUndo" disabled>↶ 復原</button>
+        <button class="tbtn" id="btnRedo" disabled>↷ 重做</button>
+      </div>
     </div>
 
     <div class="sec">
@@ -816,6 +820,38 @@ let _notePositions = [], _staveStringYs = {}, _measureLineIdx = {};
 function makeBeat(dur){ return {duration:dur||tabSelectedDur, strings:[], technique:null, isRest:false}; }
 function makeMeasure(ts){ return {timeSig:ts||'4/4', beats:[makeBeat('q')]}; }
 tabMeasures = [makeMeasure('4/4')];
+let scoreDocument=window.GuitarTool.scoreDocument.createScoreDocument({measures:tabMeasures});
+tabMeasures=window.GuitarTool.scoreDocument.activeTrack(scoreDocument).measures;
+
+function setTabMeasures(measures){
+  tabMeasures=window.GuitarTool.scoreDocument.replaceActiveMeasures(scoreDocument,measures);
+}
+function syncScoreMetadata(){
+  scoreDocument.metadata.title=document.getElementById('songTitle').value||'Untitled';
+  scoreDocument.metadata.artist=document.getElementById('artistName').value||'';
+  scoreDocument.metadata.bpm=Number(document.getElementById('bpmInput').value)||120;
+}
+function restoreTabSnapshot(serialized){
+  const restored=JSON.parse(serialized);
+  scoreDocument=restored.score;
+  tabMeasures=window.GuitarTool.scoreDocument.activeTrack(scoreDocument).measures;
+  tabCursor=restored.cursor;
+  document.getElementById('songTitle').value=scoreDocument.metadata.title||'Untitled';
+  document.getElementById('artistName').value=scoreDocument.metadata.artist||'';
+  document.getElementById('bpmInput').value=scoreDocument.metadata.bpm||120;
+  clampCursor();renderScore();updateCursorUI();refreshTabHeader();saveTabStore();updateHistoryUI();
+}
+const tabHistory=window.GuitarTool.createHistory({
+  snapshot:()=>{syncScoreMetadata();return JSON.stringify({score:scoreDocument,cursor:tabCursor});},
+  restore:restoreTabSnapshot
+});
+function checkpointTabEdit(){tabHistory.checkpoint();updateHistoryUI();}
+function updateHistoryUI(){
+  document.getElementById('btnUndo').disabled=!tabHistory.canUndo;
+  document.getElementById('btnRedo').disabled=!tabHistory.canRedo;
+}
+function undoTabEdit(){if(tabHistory.undo())setStatus('已復原');}
+function redoTabEdit(){if(tabHistory.redo())setStatus('已重做');}
 
 function clampCursor(){
   tabCursor.m = Math.max(0,Math.min(tabCursor.m,tabMeasures.length-1));
@@ -855,6 +891,7 @@ function commitNote(fret,isRest){
     setStatus(`此時值會超過 ${measure.timeSig} 小節容量`,'warn');
     return;
   }
+  checkpointTabEdit();
   beat.duration=tabSelectedDur;
   if(isRest){beat.isRest=true;beat.strings=[];}
   else{
@@ -874,6 +911,7 @@ function commitNote(fret,isRest){
 }
 
 function deleteCurrentNote(){
+  checkpointTabEdit();
   const beat=tabMeasures[tabCursor.m].beats[tabCursor.b];
   beat.strings=beat.strings.filter(n=>n.string!==tabCursor.s);
   if(!beat.strings.length)beat.isRest=true;
@@ -881,6 +919,7 @@ function deleteCurrentNote(){
 }
 
 function applyTechnique(tech){
+  checkpointTabEdit();
   const beat=tabMeasures[tabCursor.m].beats[tabCursor.b];
   if(tech===null){
     beat.technique=null;
@@ -896,11 +935,13 @@ function applyTechnique(tech){
 }
 
 function addTabMeasure(){
+  checkpointTabEdit();
   tabMeasures.push(makeMeasure(document.getElementById('timeSigSel').value));
   renderScore();updateCursorUI();saveTabStore();setStatus(`新增第${tabMeasures.length}小節`);
 }
 function deleteTabMeasure(){
   if(tabMeasures.length<=1){setStatus('至少保留一小節','warn');return;}
+  checkpointTabEdit();
   tabMeasures.pop();
   if(tabCursor.m>=tabMeasures.length){tabCursor.m=tabMeasures.length-1;tabCursor.b=0;}
   clampCursor();renderScore();updateCursorUI();saveTabStore();setStatus('已刪除最後一小節');
@@ -909,33 +950,25 @@ function deleteTabMeasure(){
 const TAB_STORE_KEY='guitar-tool-tab-v1';
 function saveTabStore(){
   try{
-    const data={
-      measures:tabMeasures,
-      title:document.getElementById('songTitle').value,
-      artist:document.getElementById('artistName').value,
-      bpm:document.getElementById('bpmInput').value,
-      timeSig:document.getElementById('timeSigSel').value
-    };
+    syncScoreMetadata();
+    const data={schemaVersion:2,score:scoreDocument};
     window.GuitarTool.storage.saveTab(data);
   }catch(e){/* A private-mode browser may not offer persistent storage. */}
 }
 function loadTabStore(){
   try{
     const data=window.GuitarTool.storage.loadTab();
-    if(!data||!Array.isArray(data.measures)||!data.measures.length)return;
-    tabMeasures=data.measures.filter(m=>m&&['4/4','3/4','6/8'].includes(m.timeSig)&&Array.isArray(m.beats)&&m.beats.length)
-      .map(m=>({timeSig:m.timeSig,beats:m.beats.filter(b=>b&&DUR_BEATS[b.duration]).map(b=>({
-        duration:b.duration,
-        strings:Array.isArray(b.strings)?b.strings.filter(n=>Number.isInteger(n.string)&&n.string>=1&&n.string<=6&&Number.isInteger(n.fret)&&n.fret>=0&&n.fret<=24):[],
-        technique:TECH_LABEL[b.technique]?b.technique:null,
-        isRest:Boolean(b.isRest)
-      }))})).filter(m=>m.beats.length);
-    if(!tabMeasures.length)tabMeasures=[makeMeasure('4/4')];
-    document.getElementById('songTitle').value=data.title||'Untitled';
-    document.getElementById('artistName').value=data.artist||'';
-    document.getElementById('bpmInput').value=data.bpm||'120';
-    document.getElementById('timeSigSel').value=data.timeSig||tabMeasures[0].timeSig;
-  }catch(e){tabMeasures=[makeMeasure('4/4')];}
+    if(!data)return;
+    scoreDocument=window.GuitarTool.scoreDocument.migrateStoredTab(data);
+    tabMeasures=window.GuitarTool.scoreDocument.activeTrack(scoreDocument).measures;
+    document.getElementById('songTitle').value=scoreDocument.metadata.title||'Untitled';
+    document.getElementById('artistName').value=scoreDocument.metadata.artist||'';
+    document.getElementById('bpmInput').value=scoreDocument.metadata.bpm||120;
+    document.getElementById('timeSigSel').value=tabMeasures[0].timeSig;
+  }catch(e){
+    scoreDocument=window.GuitarTool.scoreDocument.createScoreDocument();
+    tabMeasures=window.GuitarTool.scoreDocument.activeTrack(scoreDocument).measures;
+  }
 }
 
 /* ── VexFlow Renderer ── */
@@ -1373,10 +1406,13 @@ document.getElementById('btnDelM').addEventListener('click',deleteTabMeasure);
 document.getElementById('btnPlay').addEventListener('click', startPlayback);
 document.getElementById('btnStop').addEventListener('click', stopPlayback);
 document.getElementById('btnPDF').addEventListener('click', exportPDF);
+document.getElementById('btnUndo').addEventListener('click',undoTabEdit);
+document.getElementById('btnRedo').addEventListener('click',redoTabEdit);
 
 document.getElementById('btnClearAll').addEventListener('click',()=>{
   if(!confirm('確定清除全部？'))return;
-  tabMeasures=[makeMeasure(document.getElementById('timeSigSel').value)];
+  checkpointTabEdit();
+  setTabMeasures([makeMeasure(document.getElementById('timeSigSel').value)]);
   tabCursor={m:0,b:0,s:1};
   document.getElementById('fretInput').value='';fretBuffer='';
   renderScore();updateCursorUI();saveTabStore();setStatus('已清除');
@@ -1394,6 +1430,7 @@ document.getElementById('timeSigSel').addEventListener('change',()=>{
     setStatus(`目前音符長度無法放入 ${next}；請先刪除或縮短音符`,'warn');
     return;
   }
+  checkpointTabEdit();
   measure.timeSig=next;
   addBeatIfNeeded();
   renderScore();saveTabStore();
@@ -1409,6 +1446,12 @@ document.addEventListener('keydown',e=>{
   if(inText)return;
 
   if(e.key===' '&&!isFret){ e.preventDefault(); _isPlaying?stopPlayback():startPlayback(); return; }
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='z'){
+    e.preventDefault();
+    if(e.shiftKey)redoTabEdit();else undoTabEdit();
+    return;
+  }
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='y'){e.preventDefault();redoTabEdit();return;}
 
   if(e.key==='ArrowRight'){e.preventDefault();cursorNext();clampCursor();updateCursorUI();renderScore();return;}
   if(e.key==='ArrowLeft'){e.preventDefault();cursorPrev();clampCursor();updateCursorUI();renderScore();return;}
