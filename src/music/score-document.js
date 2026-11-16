@@ -35,6 +35,19 @@ export function activeTrack(score) {
   return score.tracks.find((track) => track.id === score.activeTrackId) ?? score.tracks[0];
 }
 
+export function setActiveTrack(score, trackId) {
+  if (!score.tracks.some((track) => track.id === trackId)) return activeTrack(score);
+  score.activeTrackId = trackId;
+  return activeTrack(score);
+}
+
+export function addTrack(score, options = {}) {
+  const track = createTrack(options);
+  score.tracks.push(track);
+  score.activeTrackId = track.id;
+  return track;
+}
+
 export function replaceActiveMeasures(score, measures) {
   activeTrack(score).measures = measures.map(normalizeMeasure);
   return activeTrack(score).measures;

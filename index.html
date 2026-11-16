@@ -371,6 +371,16 @@
     </div>
 
     <div class="sec">
+      <div class="sec-title">軌道</div>
+      <div class="field"><label>目前軌道</label><select id="trackSel"></select></div>
+      <div class="field"><label>軌道名稱</label><input type="text" id="trackName" value="Guitar"></div>
+      <div class="tbtn-row">
+        <button class="tbtn g" id="btnAddTrack">＋ 吉他軌</button>
+        <button class="tbtn r" id="btnDeleteTrack">刪除軌道</button>
+      </div>
+    </div>
+
+    <div class="sec">
       <div class="sec-title">音符輸入</div>
       <div class="cursor-disp">
         <div class="cval"><span class="cl">MEASURE</span><span class="cv" id="curM">1</span></div>
@@ -825,6 +835,45 @@ tabMeasures=window.GuitarTool.scoreDocument.activeTrack(scoreDocument).measures;
 function setTabMeasures(measures){
   tabMeasures=window.GuitarTool.scoreDocument.replaceActiveMeasures(scoreDocument,measures);
 }
+function refreshTrackUI(){
+  let track=window.GuitarTool.scoreDocument.activeTrack(scoreDocument);
+  if(scoreDocument.activeTrackId!==track.id)track=window.GuitarTool.scoreDocument.setActiveTrack(scoreDocument,track.id);
+  const select=document.getElementById('trackSel');
+  select.innerHTML='';
+  scoreDocument.tracks.forEach((item,index)=>{
+    const option=document.createElement('option');option.value=item.id;option.textContent=`${index+1}. ${item.name}`;
+    option.selected=item.id===track.id;select.appendChild(option);
+  });
+  document.getElementById('trackName').value=track.name;
+  document.getElementById('btnDeleteTrack').disabled=scoreDocument.tracks.length<=1;
+}
+function activateTrack(trackId){
+  const track=window.GuitarTool.scoreDocument.setActiveTrack(scoreDocument,trackId);
+  tabMeasures=track.measures;tabCursor={m:0,b:0,s:1};
+  refreshTrackUI();clampCursor();requestScoreRender();updateCursorUI();saveTabStore();
+}
+function restoreTracks(tracks,activeTrackId){
+  scoreDocument.tracks=cloneTabValue(tracks);scoreDocument.activeTrackId=activeTrackId;
+  activateTrack(activeTrackId);
+}
+function addGuitarTrack(){
+  const before=cloneTabValue(scoreDocument.tracks),beforeActive=scoreDocument.activeTrackId;
+  const track=window.GuitarTool.scoreDocument.addTrack(scoreDocument,{name:`Guitar ${scoreDocument.tracks.length+1}`});
+  const after=cloneTabValue(scoreDocument.tracks),afterActive=scoreDocument.activeTrackId;
+  tabHistory.push({label:'新增吉他軌',undo:()=>restoreTracks(before,beforeActive),redo:()=>restoreTracks(after,afterActive)});
+  activateTrack(track.id);setStatus(`已新增：${track.name}`);
+}
+function deleteActiveTrack(){
+  if(scoreDocument.tracks.length<=1){setStatus('至少保留一條軌道','warn');return;}
+  const track=window.GuitarTool.scoreDocument.activeTrack(scoreDocument);
+  if(!confirm(`刪除軌道「${track.name}」？`))return;
+  const before=cloneTabValue(scoreDocument.tracks),beforeActive=scoreDocument.activeTrackId;
+  scoreDocument.tracks=scoreDocument.tracks.filter(item=>item.id!==track.id);
+  scoreDocument.activeTrackId=scoreDocument.tracks[0].id;
+  const after=cloneTabValue(scoreDocument.tracks),afterActive=scoreDocument.activeTrackId;
+  tabHistory.push({label:'刪除軌道',undo:()=>restoreTracks(before,beforeActive),redo:()=>restoreTracks(after,afterActive)});
+  activateTrack(afterActive);setStatus('已刪除軌道');
+}
 function syncScoreMetadata(){
   scoreDocument.metadata.title=document.getElementById('songTitle').value||'Untitled';
   scoreDocument.metadata.artist=document.getElementById('artistName').value||'';
@@ -1216,6 +1265,16 @@ document.getElementById('btnStop').addEventListener('click', stopPlayback);
 document.getElementById('btnPDF').addEventListener('click', exportPDF);
 document.getElementById('btnUndo').addEventListener('click',undoTabEdit);
 document.getElementById('btnRedo').addEventListener('click',redoTabEdit);
+document.getElementById('trackSel').addEventListener('change',event=>activateTrack(event.target.value));
+document.getElementById('btnAddTrack').addEventListener('click',addGuitarTrack);
+document.getElementById('btnDeleteTrack').addEventListener('click',deleteActiveTrack);
+document.getElementById('trackName').addEventListener('input',event=>{
+  const track=window.GuitarTool.scoreDocument.activeTrack(scoreDocument);
+  track.name=event.target.value.trim()||'Guitar';
+  const selected=document.getElementById('trackSel').selectedOptions[0];
+  if(selected)selected.textContent=`${scoreDocument.tracks.indexOf(track)+1}. ${track.name}`;
+  saveTabStore();
+});
 
 document.getElementById('btnClearAll').addEventListener('click',()=>{
   if(!confirm('確定清除全部？'))return;
@@ -1265,6 +1324,7 @@ window.addEventListener('pagehide',()=>saveTabStore({flush:true}));
 window.addEventListener('load',()=>{
   loadSnapshotStore();
   loadTabStore();
+  refreshTrackUI();
   buildBoard();
   updateCursorUI();
   setTimeout(()=>{setStatus('編輯器已就緒 — 切換上方分頁使用指板工具或 TAB 編輯器');},100);

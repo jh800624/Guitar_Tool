@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { analyseChord, noteName } from '../src/music/theory.js';
 import { canSetDuration, measureCapacity, validateTabDocument } from '../src/music/tab-model.js';
-import { createScoreDocument, migrateStoredTab, validateScoreDocument, voiceBeats } from '../src/music/score-document.js';
+import { activeTrack, addTrack, createScoreDocument, migrateStoredTab, setActiveTrack, validateScoreDocument, voiceBeats } from '../src/music/score-document.js';
 import { createCommandHistory } from '../src/core/command-history.js';
 import { createDebouncedWriter } from '../src/core/debounced-writer.js';
 import { createBeatTimeline } from '../src/features/tab/playback.js';
@@ -59,6 +59,18 @@ test('renderer layout wraps measures and records their line index without a brow
   const result = renderer.layout([{ beats: [] }, { beats: [] }, { beats: [] }]);
   assert.deepEqual(result.lines, [[0, 1], [2]]);
   assert.equal(result.measureLineIndex[2], 1);
+});
+
+test('score document switches active tracks without sharing measures', () => {
+  const score = createScoreDocument();
+  const first = activeTrack(score);
+  const second = addTrack(score, { name: 'Lead Guitar' });
+  second.measures[0].beats[0].strings.push({ string: 1, fret: 7 });
+  setActiveTrack(score, first.id);
+  assert.equal(activeTrack(score).name, 'Guitar');
+  assert.equal(activeTrack(score).measures[0].beats[0].strings.length, 0);
+  setActiveTrack(score, second.id);
+  assert.equal(activeTrack(score).measures[0].beats[0].strings[0].fret, 7);
 });
 
 test('a measure cannot exceed its time signature', () => {
