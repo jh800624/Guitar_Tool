@@ -113,9 +113,9 @@
   .snapshots{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin:4px 14px 14px;overflow-y:auto}
   .snap-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:8px 10px 10px;transition:border-color .15s;cursor:pointer}
   .snap-card:hover{border-color:var(--border-strong);background:var(--panel)}
-  .snap-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
-  .snap-title{font-size:.8rem;font-weight:700;color:var(--text)}
-  .snap-del{border:none !important;background:transparent !important;color:var(--muted);font-size:.7rem;padding:2px 6px !important}
+  .snap-head{height:0;position:relative;z-index:1}
+  .snap-title{display:none}
+  .snap-del{position:absolute;right:-5px;top:-4px;border:none !important;background:transparent !important;color:var(--muted);font-size:.7rem;padding:2px 6px !important}
   .snap-del:hover{color:#f87171 !important}
   .snap-svg{display:block;width:100%;height:auto}
   .snap-notes{font-size:.65rem;color:var(--muted);margin-top:4px;font-family:'Courier Prime',monospace}
@@ -611,30 +611,39 @@ function collectMarkedState(){
   return Array.from({length:6},(_,s)=>{const g=markedByString[s];return g?{string:s,fret:+g.dataset.fret,midi:+g.dataset.midi}:{string:s,fret:null,midi:null};});
 }
 
-function renderChordChart(state,label){
+function renderChordChart(state,label,rootPc=null){
   const fretted=state.map(s=>s.fret).filter(f=>f!==null&&f>0);
   const hasOpen=state.some(s=>s.fret===0);
-  // Open-string chord diagrams always start at fret 1. Otherwise G and Em
-  // incorrectly draw fret 2 as the first row below the nut.
   let winStart=hasOpen?1:(fretted.length?Math.min(...fretted):1);
   let winEnd=fretted.length?Math.max(...fretted):0;
-  const winFrets=Math.max(3,winEnd-winStart+1);
-  const W=200,H=220,pad=18;
+  const winFrets=Math.max(4,winEnd-winStart+1);
+  const W=200,gridLeft=38,gridTop=52,gridW=124,rowH=28,gridH=winFrets*rowH,H=gridTop+gridH+32;
+  const stringGap=gridW/5;
   const safeLabel=String(label||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const gridW=W-2*pad,gridH=H-2*pad-20;
-  const sg=gridW/5,fg=gridH/winFrets;
+  const rootPosition=state.filter(s=>s.midi!==null&&rootPc!==null&&norm(s.midi)===rootPc)
+    .sort((a,b)=>b.string-a.string)[0];
   let svg=`<svg class="snap-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
-<rect x="0" y="0" width="${W}" height="${H}" rx="12" fill="none" stroke="var(--btn-border)"/>
-<text x="${W/2}" y="${pad-4}" text-anchor="middle" font-size="14" font-weight="700" fill="currentColor">${safeLabel}</text>`;
-  for(let i=0;i<6;i++){const x=pad+i*sg;svg+=`<line x1="${x}" y1="${pad}" x2="${x}" y2="${pad+gridH}" stroke="currentColor" stroke-opacity="0.3" stroke-width="1.5"/>`;}
-  for(let f=0;f<=winFrets;f++){const y=pad+f*fg,nut=hasOpen&&f===0;svg+=`<line x1="${pad}" y1="${y}" x2="${pad+gridW}" y2="${y}" stroke="currentColor" stroke-opacity="0.4" stroke-width="${nut?6:2}"/>`;}
-  if(!hasOpen&&winStart>0)svg+=`<text x="${pad-6}" y="${pad+fg*.9}" text-anchor="end" font-size="12" fill="currentColor">${winStart}</text>`;
+<text x="${W/2}" y="27" text-anchor="middle" font-size="25" font-family="Inter, sans-serif" font-weight="500" fill="currentColor">${safeLabel}</text>`;
+  for(let i=0;i<6;i++){
+    const x=gridLeft+i*stringGap;
+    const width=(2.2-i*.26).toFixed(2);
+    svg+=`<line x1="${x}" y1="${gridTop}" x2="${x}" y2="${gridTop+gridH}" stroke="currentColor" stroke-opacity=".8" stroke-width="${width}"/>`;
+  }
+  for(let f=0;f<=winFrets;f++){
+    const y=gridTop+f*rowH,nut=hasOpen&&f===0;
+    svg+=`<line x1="${gridLeft}" y1="${y}" x2="${gridLeft+gridW}" y2="${y}" stroke="currentColor" stroke-opacity=".85" stroke-width="${nut?3.4:1.35}"/>`;
+  }
+  if(!hasOpen&&winStart>1)svg+=`<text x="${gridLeft-8}" y="${gridTop+rowH*.72}" text-anchor="end" font-size="12" font-family="Inter, sans-serif" fill="currentColor">${winStart}</text>`;
   state.forEach(s=>{
-    const col=5-s.string,x=pad+col*sg;
-    if(s.fret===null){svg+=`<text x="${x}" y="${pad-6}" text-anchor="middle" font-size="12" fill="currentColor" opacity="0.5">x</text>`;return;}
-    if(s.fret===0){svg+=`<circle cx="${x}" cy="${pad-8}" r="4.5" fill="none" stroke="currentColor" stroke-width="2"/>`;return;}
-    const y=pad+(s.fret-winStart+.5)*fg;
-    svg+=`<circle cx="${x}" cy="${y}" r="8" fill="currentColor" fill-opacity="0.9"/>`;
+    const x=gridLeft+(5-s.string)*stringGap;
+    const isRoot=rootPosition&&rootPosition.string===s.string&&rootPosition.fret===s.fret;
+    if(s.fret===null){svg+=`<text x="${x}" y="${gridTop-11}" text-anchor="middle" font-size="17" font-family="Inter, sans-serif" fill="currentColor">×</text>`;return;}
+    if(s.fret===0){
+      svg+=isRoot?`<circle cx="${x}" cy="${gridTop-11}" r="6" fill="currentColor"/>`:`<circle cx="${x}" cy="${gridTop-11}" r="5.5" fill="var(--card)" stroke="currentColor" stroke-width="1.5"/>`;
+      return;
+    }
+    const y=gridTop+(s.fret-winStart+.5)*rowH;
+    svg+=isRoot?`<circle cx="${x}" cy="${y}" r="7" fill="currentColor"/>`:`<circle cx="${x}" cy="${y}" r="6.5" fill="var(--card)" stroke="currentColor" stroke-width="1.5"/>`;
   });
   return svg+`</svg>`;
 }
@@ -643,6 +652,12 @@ function chordSnapshotLabel(state){
   const{pcs,bassPc}=getSelectionInfo();
   if(pcs.length===1)return `單音：${noteName(pcs[0],keySel.value)}`;
   return findBestChord(pcs,keySel.value,bassPc)?.label||'未命名';
+}
+function chordSnapshotAnalysis(state,key){
+  const midis=state.filter(s=>s.midi!==null).map(s=>s.midi);
+  const pcs=Array.from(new Set(midis.map(norm)));
+  const bass=state.slice().sort((a,b)=>b.string-a.string).find(s=>s.midi!==null);
+  return findBestChord(pcs,key,bass?norm(bass.midi):null);
 }
 function restoreMarkedState(state){
   markedByString=[];
@@ -664,7 +679,8 @@ function renderSnapshots(){
     const head=document.createElement('div');head.className='snap-head';
     const title=document.createElement('span');title.className='snap-title';title.textContent=snap.label;
     const del=document.createElement('button');del.className='snap-del';del.textContent='刪除';
-    const chart=document.createElement('div');chart.innerHTML=renderChordChart(snap.state,snap.label);
+    const rootPc=Number.isInteger(snap.rootPc)?snap.rootPc:chordSnapshotAnalysis(snap.state,snap.key||keySel.value)?.root??null;
+    const chart=document.createElement('div');chart.innerHTML=renderChordChart(snap.state,snap.label,rootPc);
     const noteLine=document.createElement('div');noteLine.className='snap-notes';noteLine.textContent=`弦(6→1)：${notes.slice().reverse().join(' · ')}`;
     head.append(title,del);card.append(head,chart,noteLine);
     del.addEventListener('click',e=>{e.stopPropagation();savedSnapshots.splice(index,1);saveSnapshotStore();renderSnapshots();});
@@ -681,7 +697,8 @@ function loadSnapshotStore(){
 }
 saveSnapBtn.addEventListener('click',()=>{
   const state=collectMarkedState();if(!state.some(s=>s.midi!==null))return;
-  savedSnapshots.unshift({label:chordSnapshotLabel(state),key:keySel.value,state});
+  const analysis=chordSnapshotAnalysis(state,keySel.value);
+  savedSnapshots.unshift({label:analysis?.label||chordSnapshotLabel(state),rootPc:analysis?.root??null,key:keySel.value,state});
   saveSnapshotStore();renderSnapshots();setStatus?.('已儲存和弦快照');
 });
 
