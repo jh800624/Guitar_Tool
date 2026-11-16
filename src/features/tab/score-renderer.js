@@ -48,6 +48,12 @@ export function createScoreRenderer({ vf, buildNotes, calcStaveWidth, options })
         if (first) staveStringYs[lineIndex] = [0, 1, 2, 3, 4, 5].map((string) => stave.getYForLine(string));
         context.save(); context.setFont('Courier Prime, monospace', 8);
         context.setFillStyle(measureIndex === cursor.m ? '#888' : '#bbb'); context.fillText(`${measureIndex + 1}`, xOffset + 3, yBase - 2); context.restore();
+        context.save(); context.setFont('Courier Prime, monospace', 9); context.setFillStyle('#333');
+        if (measure.repeatStart) context.fillText('|:', xOffset + 4, yBase + 76);
+        if (measure.repeatEnd) context.fillText(`:| ×${measure.repeatEnd}`, xOffset + staveWidth - 38, yBase + 76);
+        const tempoEvent = measure.tempoEvents?.find((event) => event.beat === 0);
+        if (tempoEvent) context.fillText(`♩ = ${tempoEvent.bpm}`, xOffset + 18, yBase - 14);
+        context.restore();
         const noteGroups = (measure.voices ?? [{ beats: measure.beats }]).map((_, voiceIndex) => buildNotes(measure, voiceIndex, voiceIndex % 2 ? -1 : 1));
         const innerWidth = staveWidth - (first ? clefWidth + 4 : marginWidth + 4);
         const noteStart = xOffset + (first ? clefWidth + 4 : marginWidth + 4);

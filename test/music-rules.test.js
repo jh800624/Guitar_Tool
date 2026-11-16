@@ -5,7 +5,7 @@ import { beatDuration, canSetDuration, measureCapacity, measureDuration, validat
 import { activeTrack, addTrack, createScoreDocument, migrateStoredTab, setActiveTrack, validateScoreDocument, voiceBeats } from '../src/music/score-document.js';
 import { createCommandHistory } from '../src/core/command-history.js';
 import { createDebouncedWriter } from '../src/core/debounced-writer.js';
-import { createBeatTimeline } from '../src/features/tab/playback.js';
+import { createBeatTimeline, createMeasureSequence } from '../src/features/tab/playback.js';
 import { createScoreRenderer } from '../src/features/tab/score-renderer.js';
 
 test('C, E, G is recognised as C major', () => {
@@ -64,6 +64,18 @@ test('dotted and tuplet notes share timing rules across the score and playback',
   });
   assert.equal(events[1].time, .75);
   assert.ok(Math.abs(endTime - (13 / 12)) < 0.0001);
+});
+
+test('playback honours per-measure tempo events and repeat endings', () => {
+  const measures = [
+    { repeatStart: true, beats: [{ duration: 'q', strings: [] }] },
+    { repeatEnd: 2, tempoEvents: [{ beat: 0, bpm: 60 }], beats: [{ duration: 'q', strings: [] }] },
+    { beats: [{ duration: 'q', strings: [] }] },
+  ];
+  assert.deepEqual(createMeasureSequence(measures), [0, 1, 0, 1, 2]);
+  const { events, endTime } = createBeatTimeline({ measures, tuning: [64, 59, 55, 50, 45, 40], bpm: 120 });
+  assert.deepEqual(events.map((event) => event.bpm), [120, 60, 60, 60, 60]);
+  assert.ok(Math.abs(endTime - 4.5) < 0.0001);
 });
 
 test('renderer layout wraps measures and records their line index without a browser', () => {

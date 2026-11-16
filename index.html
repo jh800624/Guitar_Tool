@@ -381,6 +381,22 @@
     </div>
 
     <div class="sec">
+      <div class="sec-title">本小節結構</div>
+      <div class="field-row">
+        <div class="field"><label>速度事件 BPM</label><input type="number" id="measureTempoInput" min="20" max="400" placeholder="沿用全曲"></div>
+        <div class="field"><label>反覆次數</label><input type="number" id="repeatTimesInput" min="2" max="16" value="2"></div>
+      </div>
+      <div class="tbtn-row">
+        <button class="tbtn" id="btnSetTempo">設定速度</button>
+        <button class="tbtn" id="btnClearTempo">清除速度</button>
+      </div>
+      <div class="tbtn-row">
+        <button class="tbtn" id="btnRepeatStart">|: 反覆開始</button>
+        <button class="tbtn" id="btnRepeatEnd">:| 反覆結束</button>
+      </div>
+    </div>
+
+    <div class="sec">
       <div class="sec-title">音符輸入</div>
       <div class="cursor-disp">
         <div class="cval"><span class="cl">MEASURE</span><span class="cv" id="curM">1</span></div>
@@ -952,6 +968,15 @@ function updateCursorUI(){
   document.getElementById('curS').textContent=tabCursor.s;
   document.getElementById('measureCount').textContent=tabMeasures.length;
   document.getElementById('timeSigSel').value=tabMeasures[tabCursor.m].timeSig;
+  syncMeasureStructureUI();
+}
+function syncMeasureStructureUI(){
+  const measure=tabMeasures[tabCursor.m];
+  const tempo=measure.tempoEvents?.find(event=>event.beat===0);
+  document.getElementById('measureTempoInput').value=tempo?.bpm??'';
+  document.getElementById('repeatTimesInput').value=measure.repeatEnd||2;
+  document.getElementById('btnRepeatStart').classList.toggle('active',Boolean(measure.repeatStart));
+  document.getElementById('btnRepeatEnd').classList.toggle('active',Boolean(measure.repeatEnd));
 }
 
 function addBeatIfNeeded(){
@@ -1026,6 +1051,28 @@ function toggleRhythmField(field,value,label){
   checkpointTabEdit();
   beat[field]=nextValue;
   finishTabEdit(label);requestScoreRender();saveTabStore();setStatus(label);
+}
+function setMeasureTempo(){
+  const bpm=Number(document.getElementById('measureTempoInput').value);
+  if(!Number.isFinite(bpm)||bpm<20||bpm>400){setStatus('速度需介於 20–400 BPM','warn');return;}
+  checkpointTabEdit();
+  tabMeasures[tabCursor.m].tempoEvents=[{beat:0,bpm}];
+  finishTabEdit('設定小節速度');requestScoreRender();saveTabStore();setStatus(`第 ${tabCursor.m+1} 小節：♩ = ${bpm}`);
+}
+function clearMeasureTempo(){
+  if(!tabMeasures[tabCursor.m].tempoEvents?.length)return;
+  checkpointTabEdit();tabMeasures[tabCursor.m].tempoEvents=[];
+  finishTabEdit('清除小節速度');requestScoreRender();updateCursorUI();saveTabStore();setStatus('已清除小節速度');
+}
+function toggleMeasureRepeat(field){
+  const measure=tabMeasures[tabCursor.m];
+  checkpointTabEdit();
+  if(field==='repeatStart')measure.repeatStart=!measure.repeatStart;
+  else {
+    const times=Math.max(2,Math.min(16,Number(document.getElementById('repeatTimesInput').value)||2));
+    measure.repeatEnd=measure.repeatEnd?0:times;
+  }
+  finishTabEdit(field==='repeatStart'?'切換反覆開始':'切換反覆結束');requestScoreRender();updateCursorUI();saveTabStore();setStatus('已更新反覆記號');
 }
 
 function addTabMeasure(){
@@ -1280,6 +1327,10 @@ document.getElementById('btnClearTech').addEventListener('click',()=>applyTechni
 document.getElementById('btnDot').addEventListener('click',()=>toggleRhythmField('dots',1,'切換附點'));
 document.getElementById('btnTie').addEventListener('click',()=>toggleRhythmField('tie',true,'切換 Tie'));
 document.getElementById('btnTriplet').addEventListener('click',()=>toggleRhythmField('tuplet',{actual:3,normal:2},'切換三連音'));
+document.getElementById('btnSetTempo').addEventListener('click',setMeasureTempo);
+document.getElementById('btnClearTempo').addEventListener('click',clearMeasureTempo);
+document.getElementById('btnRepeatStart').addEventListener('click',()=>toggleMeasureRepeat('repeatStart'));
+document.getElementById('btnRepeatEnd').addEventListener('click',()=>toggleMeasureRepeat('repeatEnd'));
 
 document.getElementById('btnEnter').addEventListener('click',()=>{
   const f=parseInt(document.getElementById('fretInput').value.trim(),10);

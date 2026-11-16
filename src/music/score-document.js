@@ -73,7 +73,10 @@ function normalizeMeasure(measure) {
   const timeSig = TIME_SIGNATURES.has(measure?.timeSig) ? measure.timeSig : '4/4';
   const sourceVoices = measure?.voices ?? [{ beats: measure?.beats }];
   const voices = sourceVoices.slice(0, 4).map((voice) => ({ beats: normalizeBeats(voice?.beats, timeSig) }));
-  const normalized = { timeSig, repeatStart: Boolean(measure?.repeatStart), repeatEnd: Number.isInteger(measure?.repeatEnd) ? measure.repeatEnd : 0, tempoEvents: Array.isArray(measure?.tempoEvents) ? measure.tempoEvents : [], voices: voices.length ? voices : [{ beats: [createBeat()] }] };
+  const tempoEvents = Array.isArray(measure?.tempoEvents) ? measure.tempoEvents
+    .filter((event) => Number.isInteger(event?.beat) && event.beat >= 0 && Number.isFinite(event?.bpm) && event.bpm >= 20 && event.bpm <= 400)
+    .map((event) => ({ beat: event.beat, bpm: event.bpm })) : [];
+  const normalized = { timeSig, repeatStart: Boolean(measure?.repeatStart), repeatEnd: Number.isInteger(measure?.repeatEnd) && measure.repeatEnd >= 0 ? Math.min(16, measure.repeatEnd) : 0, tempoEvents, voices: voices.length ? voices : [{ beats: [createBeat()] }] };
   normalized.beats = normalized.voices[0].beats; // Compatibility bridge while the editor moves to explicit voices.
   return normalized;
 }
