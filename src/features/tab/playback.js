@@ -1,32 +1,40 @@
-import { beatDuration } from '../../music/tab-model.js';
+import { beatDuration, measureCapacity } from '../../music/tab-model.js';
 
-export function createBeatTimeline({ measures, tuning, bpm, fromMeasure = 0, startTime = 0 }) {
+export function createBeatTimeline({ measures, tuning, bpm, fromMeasure = 0, toMeasure = measures.length - 1, loopCount = 1, startTime = 0 }) {
   const timeline = [];
+  const measureStarts = [];
   let time = startTime;
   let currentTempo = bpm;
-  for (const measureIndex of createMeasureSequence(measures, fromMeasure)) {
+  const sequence = createMeasureSequence(measures, fromMeasure, toMeasure);
+  const repetitions = Math.max(1, Math.min(16, Number(loopCount) || 1));
+  for (let loopIndex = 0; loopIndex < repetitions; loopIndex += 1) for (const measureIndex of sequence) {
     const measure = measures[measureIndex];
+    const measureStart = time;
+    let measureTempo = currentTempo;
     for (let beatIndex = 0; beatIndex < measure.beats.length; beatIndex += 1) {
       const beat = measure.beats[beatIndex];
       const tempoEvent = measure.tempoEvents?.find((event) => event.beat === beatIndex && Number.isFinite(event.bpm));
       if (tempoEvent) currentTempo = tempoEvent.bpm;
+      if (beatIndex === 0) measureTempo = currentTempo;
       const duration = beatDuration(beat) * (60 / currentTempo);
       const notes = !beat.isRest && beat.technique !== 'mute'
         ? (beat.strings ?? []).map((note) => tuning[note.string - 1] + note.fret).filter(Number.isFinite) : [];
       timeline.push({ time, duration, measureIndex, beatIndex, bpm: currentTempo, notes });
       time += duration;
     }
+    measureStarts.push({ time: measureStart, measureIndex, bpm: measureTempo, timeSig: measure.timeSig });
   }
-  return { events: timeline, endTime: time };
+  return { events: timeline, measureStarts, endTime: time };
 }
 
-export function createMeasureSequence(measures, fromMeasure = 0) {
+export function createMeasureSequence(measures, fromMeasure = 0, toMeasure = measures.length - 1) {
   const sequence = [];
   const endVisits = new Map();
   let index = Math.max(0, Math.min(fromMeasure, Math.max(0, measures.length - 1)));
+  const lastMeasure = Math.max(index, Math.min(toMeasure, measures.length - 1));
   let repeatStart = index;
   let safety = 0;
-  while (index < measures.length && safety < measures.length * 16) {
+  while (index <= lastMeasure && safety < measures.length * 16) {
     safety += 1;
     const measure = measures[index];
     if (measure.repeatStart) repeatStart = index;
@@ -44,7 +52,15 @@ export function createMeasureSequence(measures, fromMeasure = 0) {
   return sequence;
 }
 
-export function createTabPlayback({ getContext, pluck, onState = () => {}, onBeat = () => {} }) {
+export function createMetronomeTimeline(measureStarts) {
+  return measureStarts.flatMap(({ time, bpm, timeSig }) => {
+    const beats = Math.max(1, Math.round(measureCapacity(timeSig)));
+    const secondsPerBeat = 60 / bpm;
+    return Array.from({ length: beats }, (_, beat) => ({ time: time + beat * secondsPerBeat, accent: beat === 0 }));
+  });
+}
+
+export function createTabPlayback({ getContext, pluck, metronomeClick = () => null, onState = () => {}, onBeat = () => {} }) {
   let playing = false;
   let animationFrame = null;
   let scheduledNodes = [];
@@ -58,18 +74,21 @@ export function createTabPlayback({ getContext, pluck, onState = () => {}, onBea
     onState({ playing: false, reason });
   };
 
-  const start = async ({ measures, tuning, bpm, fromMeasure }) => {
+  const start = async ({ measures, tuning, bpm, fromMeasure, toMeasure, loopCount, metronome = false }) => {
     if (playing) stop('restarted');
     const context = getContext();
     if (context.state === 'suspended') await context.resume();
     const startMeasure = Math.min(measures.length - 1, Math.max(0, fromMeasure));
-    const { events, endTime } = createBeatTimeline({
-      measures, tuning, bpm, fromMeasure: startMeasure, startTime: context.currentTime + .05,
+    const { events, measureStarts, endTime } = createBeatTimeline({
+      measures, tuning, bpm, fromMeasure: startMeasure, toMeasure, loopCount, startTime: context.currentTime + .05,
     });
     if (!events.length) return;
     playing = true;
     onState({ playing: true, reason: 'started', fromMeasure: startMeasure });
     events.forEach((event) => event.notes.forEach((midi) => scheduledNodes.push(pluck(midi, event.time, event.duration))));
+    if (metronome) createMetronomeTimeline(measureStarts).forEach((event) => {
+      const node = metronomeClick(event.accent, event.time); if (node) scheduledNodes.push(node);
+    });
 
     const sync = () => {
       if (!playing) return;

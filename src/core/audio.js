@@ -18,3 +18,17 @@ export function pluck(midi, start = audioContext().currentTime, duration = 1) {
   oscillator.start(start); oscillator.stop(start + Math.min(duration, 3));
   return oscillator;
 }
+
+export function metronomeClick(accent = false, start = audioContext().currentTime) {
+  const ctx = audioContext();
+  const oscillator = ctx.createOscillator();
+  const gain = ctx.createGain();
+  oscillator.type = 'square';
+  oscillator.frequency.setValueAtTime(accent ? 1320 : 880, start);
+  gain.gain.setValueAtTime(.001, start);
+  gain.gain.exponentialRampToValueAtTime(accent ? .16 : .09, start + .002);
+  gain.gain.exponentialRampToValueAtTime(.001, start + .045);
+  oscillator.connect(gain).connect(ctx.destination);
+  oscillator.start(start); oscillator.stop(start + .05);
+  return oscillator;
+}

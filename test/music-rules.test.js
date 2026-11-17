@@ -5,7 +5,7 @@ import { beatDuration, canSetDuration, measureCapacity, measureDuration, validat
 import { activeTrack, addTrack, createScoreDocument, migrateStoredTab, setActiveTrack, validateScoreDocument, voiceBeats } from '../src/music/score-document.js';
 import { createCommandHistory } from '../src/core/command-history.js';
 import { createDebouncedWriter } from '../src/core/debounced-writer.js';
-import { createBeatTimeline, createMeasureSequence } from '../src/features/tab/playback.js';
+import { createBeatTimeline, createMeasureSequence, createMetronomeTimeline } from '../src/features/tab/playback.js';
 import { createScoreRenderer } from '../src/features/tab/score-renderer.js';
 
 test('C, E, G is recognised as C major', () => {
@@ -76,6 +76,19 @@ test('playback honours per-measure tempo events and repeat endings', () => {
   const { events, endTime } = createBeatTimeline({ measures, tuning: [64, 59, 55, 50, 45, 40], bpm: 120 });
   assert.deepEqual(events.map((event) => event.bpm), [120, 60, 60, 60, 60]);
   assert.ok(Math.abs(endTime - 4.5) < 0.0001);
+});
+
+test('practice loop limits playback to its range and produces accented metronome beats', () => {
+  const measures = [
+    { timeSig: '4/4', beats: [{ duration: 'q', strings: [] }] },
+    { timeSig: '3/4', beats: [{ duration: 'q', strings: [] }, { duration: 'q', strings: [] }, { duration: 'q', strings: [] }] },
+    { timeSig: '4/4', beats: [{ duration: 'q', strings: [] }] },
+  ];
+  const result = createBeatTimeline({ measures, tuning: [64], bpm: 120, fromMeasure: 1, toMeasure: 1, loopCount: 2 });
+  assert.deepEqual(result.events.map((event) => event.measureIndex), [1, 1, 1, 1, 1, 1]);
+  const clicks = createMetronomeTimeline(result.measureStarts);
+  assert.equal(clicks.length, 6);
+  assert.deepEqual(clicks.filter((event) => event.accent).map((event) => event.time), [.0, 1.5]);
 });
 
 test('renderer layout wraps measures and records their line index without a browser', () => {

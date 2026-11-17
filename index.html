@@ -455,9 +455,13 @@
         <button class="tbtn g full" id="btnPlay">▶ 播放</button>
         <button class="tbtn r" id="btnStop" disabled>■ 停止</button>
       </div>
-      <div class="field" style="margin-top:6px">
-        <label>從第幾小節</label>
-        <input type="number" id="playFromM" value="1" min="1" style="width:100%">
+      <div class="field-row" style="margin-top:6px">
+        <div class="field"><label>從第幾小節</label><input type="number" id="playFromM" value="1" min="1"></div>
+        <div class="field"><label>到第幾小節</label><input type="number" id="playToM" value="1" min="1"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Loop 次數</label><input type="number" id="loopCountInput" value="1" min="1" max="16"></div>
+        <div class="field"><label><input type="checkbox" id="metronomeToggle"> 節拍器</label></div>
       </div>
     </div>
 
@@ -1291,6 +1295,7 @@ async function exportPDF(){
 const tabPlayback=window.GuitarTool.createTabPlayback({
   getContext:()=>{ensureAudio();return audioCtx;},
   pluck:(midi,start,duration)=>window.GuitarTool.audio.pluck(midi,start,duration),
+  metronomeClick:(accent,start)=>window.GuitarTool.audio.metronomeClick(accent,start),
   onState:({playing,reason})=>{
     document.getElementById('btnPlay').disabled=playing;
     document.getElementById('btnStop').disabled=!playing;
@@ -1306,10 +1311,16 @@ function startPlayback(){
   const bpm=parseFloat(document.getElementById('bpmInput').value)||120;
   const requestedFrom=parseInt(document.getElementById('playFromM').value||'1',10);
   const fromM=Math.min(tabMeasures.length-1,Math.max(0,(Number.isFinite(requestedFrom)?requestedFrom:1)-1));
+  const requestedTo=parseInt(document.getElementById('playToM').value||String(tabMeasures.length),10);
+  const toM=Math.min(tabMeasures.length-1,Math.max(fromM,(Number.isFinite(requestedTo)?requestedTo:tabMeasures.length)-1));
+  const loopCount=Math.max(1,Math.min(16,parseInt(document.getElementById('loopCountInput').value||'1',10)||1));
+  const metronome=document.getElementById('metronomeToggle').checked;
   document.getElementById('playFromM').value=fromM+1;
+  document.getElementById('playToM').value=toM+1;
+  document.getElementById('loopCountInput').value=loopCount;
   const tuning=window.GuitarTool.scoreDocument.activeTrack(scoreDocument).tuning;
-  tabPlayback.start({measures:tabMeasures,tuning,bpm,fromMeasure:fromM});
-  setStatus(`播放中… BPM ${bpm}`);
+  tabPlayback.start({measures:tabMeasures,tuning,bpm,fromMeasure:fromM,toMeasure:toM,loopCount,metronome});
+  setStatus(`播放中… M${fromM+1}–${toM+1}，${loopCount} 次${metronome?'，節拍器開啟':''}`);
 }
 
 /* ── UI Bindings ── */
