@@ -378,6 +378,10 @@
         <button class="tbtn g" id="btnAddTrack">＋ 吉他軌</button>
         <button class="tbtn r" id="btnDeleteTrack">刪除軌道</button>
       </div>
+      <div class="tbtn-row">
+        <button class="tbtn" id="btnTrackSolo">S Solo</button>
+        <button class="tbtn" id="btnTrackMute">M Mute</button>
+      </div>
     </div>
 
     <div class="sec">
@@ -893,6 +897,8 @@ function refreshTrackUI(){
   });
   document.getElementById('trackName').value=track.name;
   document.getElementById('btnDeleteTrack').disabled=scoreDocument.tracks.length<=1;
+  document.getElementById('btnTrackSolo').classList.toggle('active',track.solo);
+  document.getElementById('btnTrackMute').classList.toggle('active',track.muted);
 }
 function activateTrack(trackId){
   const track=window.GuitarTool.scoreDocument.setActiveTrack(scoreDocument,trackId);
@@ -921,6 +927,14 @@ function deleteActiveTrack(){
   const after=cloneTabValue(scoreDocument.tracks),afterActive=scoreDocument.activeTrackId;
   tabHistory.push({label:'刪除軌道',undo:()=>restoreTracks(before,beforeActive),redo:()=>restoreTracks(after,afterActive)});
   activateTrack(afterActive);setStatus('已刪除軌道');
+}
+function toggleTrackPlaybackFlag(field){
+  const track=window.GuitarTool.scoreDocument.activeTrack(scoreDocument);
+  const before=cloneTabValue(scoreDocument.tracks),beforeActive=scoreDocument.activeTrackId;
+  track[field]=!track[field];
+  const after=cloneTabValue(scoreDocument.tracks),afterActive=scoreDocument.activeTrackId;
+  tabHistory.push({label:`切換軌道 ${field}`,undo:()=>restoreTracks(before,beforeActive),redo:()=>restoreTracks(after,afterActive)});
+  refreshTrackUI();saveTabStore();setStatus(`${track.name}：${field==='solo'?'Solo':'Mute'} ${track[field]?'開啟':'關閉'}`);
 }
 function syncScoreMetadata(){
   scoreDocument.metadata.title=document.getElementById('songTitle').value||'Untitled';
@@ -1377,8 +1391,11 @@ function startPlayback(){
   document.getElementById('playFromM').value=fromM+1;
   document.getElementById('playToM').value=toM+1;
   document.getElementById('loopCountInput').value=loopCount;
-  const tuning=window.GuitarTool.scoreDocument.activeTrack(scoreDocument).tuning;
-  tabPlayback.start({measures:tabMeasures,tuning,bpm,fromMeasure:fromM,toMeasure:toM,loopCount,metronome});
+  const active=window.GuitarTool.scoreDocument.activeTrack(scoreDocument);
+  const hasSolo=scoreDocument.tracks.some(track=>track.solo);
+  const parts=scoreDocument.tracks.filter(track=>!track.muted&&(!hasSolo||track.solo)).map(track=>({id:track.id,measures:track.measures,tuning:track.tuning}));
+  if(!parts.length){setStatus('沒有可播放的軌道；請關閉 Mute 或開啟 Solo','warn');return;}
+  tabPlayback.start({measures:tabMeasures,tuning:active.tuning,bpm,fromMeasure:fromM,toMeasure:toM,loopCount,metronome,parts,primaryPartId:active.id});
   setStatus(`播放中… M${fromM+1}–${toM+1}，${loopCount} 次${metronome?'，節拍器開啟':''}`);
 }
 
@@ -1426,6 +1443,8 @@ document.getElementById('trackSel').addEventListener('change',event=>activateTra
 document.getElementById('voiceSel').addEventListener('change',event=>activateVoice(Number(event.target.value)));
 document.getElementById('btnAddTrack').addEventListener('click',addGuitarTrack);
 document.getElementById('btnDeleteTrack').addEventListener('click',deleteActiveTrack);
+document.getElementById('btnTrackSolo').addEventListener('click',()=>toggleTrackPlaybackFlag('solo'));
+document.getElementById('btnTrackMute').addEventListener('click',()=>toggleTrackPlaybackFlag('muted'));
 document.getElementById('trackName').addEventListener('input',event=>{
   const track=window.GuitarTool.scoreDocument.activeTrack(scoreDocument);
   track.name=event.target.value.trim()||'Guitar';

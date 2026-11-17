@@ -17,9 +17,9 @@ export function voiceBeats(measure, voiceIndex = 0) {
   return measure.voices[voiceIndex].beats;
 }
 
-export function createTrack({ name = 'Guitar', tuning = STANDARD_GUITAR_TUNING, measures = [createMeasure()] } = {}) {
+export function createTrack({ name = 'Guitar', tuning = STANDARD_GUITAR_TUNING, measures = [createMeasure()], muted = false, solo = false } = {}) {
   const normalizedMeasures = measures.map(normalizeMeasure);
-  return { id: crypto.randomUUID(), name, instrument: 'guitar', tuning: [...tuning], measures: normalizedMeasures };
+  return { id: crypto.randomUUID(), name, instrument: 'guitar', tuning: [...tuning], muted: Boolean(muted), solo: Boolean(solo), measures: normalizedMeasures };
 }
 
 export function createScoreDocument({ title = 'Untitled', artist = '', bpm = 120, measures } = {}) {

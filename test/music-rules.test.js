@@ -5,7 +5,7 @@ import { beatDuration, canSetDuration, measureCapacity, measureDuration, validat
 import { activeTrack, addTrack, createScoreDocument, migrateStoredTab, setActiveTrack, validateScoreDocument, voiceBeats } from '../src/music/score-document.js';
 import { createCommandHistory } from '../src/core/command-history.js';
 import { createDebouncedWriter } from '../src/core/debounced-writer.js';
-import { createBeatTimeline, createMeasureSequence, createMetronomeTimeline } from '../src/features/tab/playback.js';
+import { createBeatTimeline, createMeasureSequence, createMetronomeTimeline, createPlaybackMix } from '../src/features/tab/playback.js';
 import { createScoreRenderer } from '../src/features/tab/score-renderer.js';
 import { parseAsciiTab, serializeAsciiTab } from '../src/features/tab/ascii-tab.js';
 import { createMidiFile, serializeMusicXml } from '../src/features/tab/interchange.js';
@@ -105,6 +105,15 @@ test('practice loop limits playback to its range and produces accented metronome
   assert.deepEqual(clicks.filter((event) => event.accent).map((event) => event.time), [.0, 1.5]);
 });
 
+test('playback mix schedules only the tracks selected by solo and mute filtering', () => {
+  const source = (fret) => ({ measures: [{ timeSig: '4/4', beats: [{ duration: 'q', strings: [{ string: 1, fret }] }] }], tuning: [64] });
+  const mix = createPlaybackMix({ parts: [{ id: 'rhythm', ...source(0) }, { id: 'lead', ...source(7) }], bpm: 120, primaryPartId: 'lead' });
+  assert.deepEqual(mix.events.map((event) => event.partId), ['rhythm', 'lead']);
+  assert.deepEqual(mix.events.map((event) => event.notes[0]), [64, 71]);
+  const soloMix = createPlaybackMix({ parts: [{ id: 'lead', ...source(7) }], bpm: 120, primaryPartId: 'lead' });
+  assert.deepEqual(soloMix.events.map((event) => event.partId), ['lead']);
+});
+
 test('ASCII TAB export and import preserve frets, chords and measure boundaries', () => {
   const text = serializeAsciiTab({ title: 'Lesson', measures: [{ timeSig: '4/4', beats: [
     { strings: [{ string: 1, fret: 3 }, { string: 2, fret: 12 }] }, { strings: [{ string: 6, fret: 0 }] },
@@ -144,6 +153,7 @@ test('score document switches active tracks without sharing measures', () => {
   assert.equal(activeTrack(score).measures[0].beats[0].strings.length, 0);
   setActiveTrack(score, second.id);
   assert.equal(activeTrack(score).measures[0].beats[0].strings[0].fret, 7);
+  assert.equal(activeTrack(score).muted, false);
 });
 
 test('a measure cannot exceed its time signature', () => {

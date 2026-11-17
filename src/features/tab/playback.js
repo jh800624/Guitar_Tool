@@ -63,6 +63,19 @@ export function createMetronomeTimeline(measureStarts) {
   });
 }
 
+export function createPlaybackMix({ parts, bpm, fromMeasure = 0, toMeasure, loopCount = 1, startTime = 0, primaryPartId }) {
+  const playableParts = parts.filter((part) => part.measures?.length);
+  const timelines = playableParts.map((part) => ({ part, timeline: createBeatTimeline({
+    measures: part.measures, tuning: part.tuning, bpm, fromMeasure: Math.min(fromMeasure, part.measures.length - 1), toMeasure: Math.min(toMeasure ?? part.measures.length - 1, part.measures.length - 1), loopCount, startTime,
+  }) }));
+  const primaryTimeline = timelines.find(({ part }) => part.id === primaryPartId)?.timeline ?? timelines[0]?.timeline;
+  return {
+    events: timelines.flatMap(({ part, timeline }) => timeline.events.map((event) => ({ ...event, partId: part.id }))).sort((a, b) => a.time - b.time),
+    measureStarts: primaryTimeline?.measureStarts ?? [],
+    endTime: timelines.length ? Math.max(...timelines.map(({ timeline }) => timeline.endTime)) : startTime,
+  };
+}
+
 export function createTabPlayback({ getContext, pluck, metronomeClick = () => null, onState = () => {}, onBeat = () => {} }) {
   let playing = false;
   let animationFrame = null;
@@ -77,14 +90,13 @@ export function createTabPlayback({ getContext, pluck, metronomeClick = () => nu
     onState({ playing: false, reason });
   };
 
-  const start = async ({ measures, tuning, bpm, fromMeasure, toMeasure, loopCount, metronome = false }) => {
+  const start = async ({ measures, tuning, bpm, fromMeasure, toMeasure, loopCount, metronome = false, parts, primaryPartId }) => {
     if (playing) stop('restarted');
     const context = getContext();
     if (context.state === 'suspended') await context.resume();
+    const playableParts = parts?.length ? parts : [{ id: 'active', measures, tuning }];
     const startMeasure = Math.min(measures.length - 1, Math.max(0, fromMeasure));
-    const { events, measureStarts, endTime } = createBeatTimeline({
-      measures, tuning, bpm, fromMeasure: startMeasure, toMeasure, loopCount, startTime: context.currentTime + .05,
-    });
+    const { events, measureStarts, endTime } = createPlaybackMix({ parts: playableParts, bpm, fromMeasure: startMeasure, toMeasure, loopCount, startTime: context.currentTime + .05, primaryPartId });
     if (!events.length) return;
     playing = true;
     onState({ playing: true, reason: 'started', fromMeasure: startMeasure });
@@ -97,8 +109,9 @@ export function createTabPlayback({ getContext, pluck, metronomeClick = () => nu
       if (!playing) return;
       const now = context.currentTime;
       if (now >= endTime) { stop('finished'); return; }
-      let current = events[0];
-      for (const event of events) { if (event.time <= now) current = event; else break; }
+      const primaryEvents = events.filter((event) => event.partId === (primaryPartId ?? events[0].partId));
+      let current = primaryEvents[0] ?? events[0];
+      for (const event of primaryEvents) { if (event.time <= now) current = event; else break; }
       onBeat(current);
       animationFrame = requestAnimationFrame(sync);
     };
