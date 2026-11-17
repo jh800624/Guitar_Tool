@@ -486,6 +486,8 @@
     <div class="sec">
       <div class="sec-title">匯出</div>
       <button class="tbtn b full" id="btnPDF">匯出 PDF</button>
+      <button class="tbtn full" id="btnExportMidi">匯出 MIDI</button>
+      <button class="tbtn full" id="btnExportMusicXml">匯出 MusicXML</button>
       <button class="tbtn full" id="btnExportAscii">匯出 ASCII TAB</button>
       <button class="tbtn full" id="btnImportAscii">匯入 ASCII TAB</button>
       <input type="file" id="asciiFileInput" accept=".txt,.tab,text/plain" hidden>
@@ -1156,6 +1158,18 @@ function exportAsciiTab(){
   const text=window.GuitarTool.asciiTab.serializeAsciiTab({title:scoreDocument.metadata.title,measures:tabMeasures});
   downloadText((scoreDocument.metadata.title||'tab').replace(/[^\w]/g,'_')+'.txt',text);setStatus('ASCII TAB 已匯出');
 }
+function exportMidi(){
+  syncScoreMetadata();
+  const track=window.GuitarTool.scoreDocument.activeTrack(scoreDocument);
+  const bytes=window.GuitarTool.interchange.createMidiFile({measures:tabMeasures,tuning:track.tuning,bpm:scoreDocument.metadata.bpm});
+  const url=URL.createObjectURL(new Blob([bytes],{type:'audio/midi'}));const anchor=document.createElement('a');anchor.href=url;anchor.download=(scoreDocument.metadata.title||'tab').replace(/[^\w]/g,'_')+'.mid';anchor.click();setTimeout(()=>URL.revokeObjectURL(url),0);setStatus('MIDI 已匯出');
+}
+function exportMusicXml(){
+  syncScoreMetadata();
+  const track=window.GuitarTool.scoreDocument.activeTrack(scoreDocument);
+  const xml=window.GuitarTool.interchange.serializeMusicXml({title:scoreDocument.metadata.title,measures:tabMeasures,tuning:track.tuning,bpm:scoreDocument.metadata.bpm});
+  downloadText((scoreDocument.metadata.title||'tab').replace(/[^\w]/g,'_')+'.musicxml',xml);setStatus('MusicXML 已匯出');
+}
 async function importAsciiTab(file){
   try{
     const {measures}=window.GuitarTool.asciiTab.parseAsciiTab(await file.text());
@@ -1401,6 +1415,8 @@ document.getElementById('btnDelM').addEventListener('click',deleteTabMeasure);
 document.getElementById('btnPlay').addEventListener('click', startPlayback);
 document.getElementById('btnStop').addEventListener('click', stopPlayback);
 document.getElementById('btnPDF').addEventListener('click', exportPDF);
+document.getElementById('btnExportMidi').addEventListener('click',exportMidi);
+document.getElementById('btnExportMusicXml').addEventListener('click',exportMusicXml);
 document.getElementById('btnExportAscii').addEventListener('click',exportAsciiTab);
 document.getElementById('btnImportAscii').addEventListener('click',()=>document.getElementById('asciiFileInput').click());
 document.getElementById('asciiFileInput').addEventListener('change',event=>{const file=event.target.files?.[0];if(file)importAsciiTab(file);event.target.value='';});

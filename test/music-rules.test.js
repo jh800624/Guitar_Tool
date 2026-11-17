@@ -8,6 +8,7 @@ import { createDebouncedWriter } from '../src/core/debounced-writer.js';
 import { createBeatTimeline, createMeasureSequence, createMetronomeTimeline } from '../src/features/tab/playback.js';
 import { createScoreRenderer } from '../src/features/tab/score-renderer.js';
 import { parseAsciiTab, serializeAsciiTab } from '../src/features/tab/ascii-tab.js';
+import { createMidiFile, serializeMusicXml } from '../src/features/tab/interchange.js';
 
 test('C, E, G is recognised as C major', () => {
   assert.equal(analyseChord([0, 4, 7], 'C', 0).label, 'Cmaj');
@@ -112,6 +113,17 @@ test('ASCII TAB export and import preserve frets, chords and measure boundaries'
   assert.equal(imported.measures.length, 1);
   assert.deepEqual(imported.measures[0].beats[0].strings, [{ string: 1, fret: 3 }, { string: 2, fret: 12 }]);
   assert.deepEqual(imported.measures[0].beats[1].strings, [{ string: 6, fret: 0 }]);
+});
+
+test('MIDI and MusicXML exports retain tempo, guitar string and fret data', () => {
+  const measures = [{ timeSig: '4/4', tempoEvents: [{ beat: 0, bpm: 90 }], beats: [{ duration: 'q', strings: [{ string: 1, fret: 3 }] }] }];
+  const midi = createMidiFile({ measures, tuning: [64], bpm: 120 });
+  assert.deepEqual([...midi.slice(0, 4)], [77, 84, 104, 100]);
+  assert.ok([...midi].includes(67));
+  const xml = serializeMusicXml({ title: 'A & B', measures, tuning: [64], bpm: 120 });
+  assert.match(xml, /work-title>A &amp; B/);
+  assert.match(xml, /<string>1<\/string><fret>3<\/fret>/);
+  assert.match(xml, /per-minute>90/);
 });
 
 test('renderer layout wraps measures and records their line index without a browser', () => {

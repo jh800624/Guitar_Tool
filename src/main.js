@@ -13,5 +13,6 @@ import { createTabPlayback } from './features/tab/playback.js';
 import { createScoreRenderer } from './features/tab/score-renderer.js';
 import { renderCursorOverlay } from './features/tab/cursor-overlay.js';
 import * as asciiTab from './features/tab/ascii-tab.js';
+import * as interchange from './features/tab/interchange.js';
 
-window.GuitarTool = Object.freeze({ theory, tabModel, scoreDocument, storage, audio, asciiTab, createCommandHistory, createDebouncedWriter, createRenderScheduler, bindTabKeyboard, createTabPlayback, createScoreRenderer, renderCursorOverlay });
+window.GuitarTool = Object.freeze({ theory, tabModel, scoreDocument, storage, audio, asciiTab, interchange, createCommandHistory, createDebouncedWriter, createRenderScheduler, bindTabKeyboard, createTabPlayback, createScoreRenderer, renderCursorOverlay });
