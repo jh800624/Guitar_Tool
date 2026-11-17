@@ -7,6 +7,7 @@ import { createCommandHistory } from '../src/core/command-history.js';
 import { createDebouncedWriter } from '../src/core/debounced-writer.js';
 import { createBeatTimeline, createMeasureSequence, createMetronomeTimeline } from '../src/features/tab/playback.js';
 import { createScoreRenderer } from '../src/features/tab/score-renderer.js';
+import { parseAsciiTab, serializeAsciiTab } from '../src/features/tab/ascii-tab.js';
 
 test('C, E, G is recognised as C major', () => {
   assert.equal(analyseChord([0, 4, 7], 'C', 0).label, 'Cmaj');
@@ -89,6 +90,16 @@ test('practice loop limits playback to its range and produces accented metronome
   const clicks = createMetronomeTimeline(result.measureStarts);
   assert.equal(clicks.length, 6);
   assert.deepEqual(clicks.filter((event) => event.accent).map((event) => event.time), [.0, 1.5]);
+});
+
+test('ASCII TAB export and import preserve frets, chords and measure boundaries', () => {
+  const text = serializeAsciiTab({ title: 'Lesson', measures: [{ timeSig: '4/4', beats: [
+    { strings: [{ string: 1, fret: 3 }, { string: 2, fret: 12 }] }, { strings: [{ string: 6, fret: 0 }] },
+  ] }] });
+  const imported = parseAsciiTab(text);
+  assert.equal(imported.measures.length, 1);
+  assert.deepEqual(imported.measures[0].beats[0].strings, [{ string: 1, fret: 3 }, { string: 2, fret: 12 }]);
+  assert.deepEqual(imported.measures[0].beats[1].strings, [{ string: 6, fret: 0 }]);
 });
 
 test('renderer layout wraps measures and records their line index without a browser', () => {

@@ -477,6 +477,9 @@
     <div class="sec">
       <div class="sec-title">匯出</div>
       <button class="tbtn b full" id="btnPDF">匯出 PDF</button>
+      <button class="tbtn full" id="btnExportAscii">匯出 ASCII TAB</button>
+      <button class="tbtn full" id="btnImportAscii">匯入 ASCII TAB</button>
+      <input type="file" id="asciiFileInput" accept=".txt,.tab,text/plain" hidden>
       <button class="tbtn r full" id="btnClearAll">清除全部</button>
     </div>
 
@@ -1121,6 +1124,25 @@ function loadTabStore(){
   }
 }
 
+function downloadText(filename,text){
+  const url=URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'}));
+  const anchor=document.createElement('a');anchor.href=url;anchor.download=filename;anchor.click();
+  setTimeout(()=>URL.revokeObjectURL(url),0);
+}
+function exportAsciiTab(){
+  syncScoreMetadata();
+  const text=window.GuitarTool.asciiTab.serializeAsciiTab({title:scoreDocument.metadata.title,measures:tabMeasures});
+  downloadText((scoreDocument.metadata.title||'tab').replace(/[^\w]/g,'_')+'.txt',text);setStatus('ASCII TAB 已匯出');
+}
+async function importAsciiTab(file){
+  try{
+    const {measures}=window.GuitarTool.asciiTab.parseAsciiTab(await file.text());
+    const before=cloneTabValue(tabMeasures);setTabMeasures(measures);
+    recordMeasureReplacement(before,tabMeasures,'匯入 ASCII TAB');tabCursor={m:0,b:0,s:1};
+    requestScoreRender();updateCursorUI();saveTabStore({flush:true});setStatus(`已匯入 ${tabMeasures.length} 小節；時值預設為四分音符`);
+  }catch(error){setStatus('ASCII 匯入失敗：'+error.message,'err');}
+}
+
 /* ── VexFlow Renderer ── */
 const scoreRenderScheduler=window.GuitarTool.createRenderScheduler(renderScore);
 function requestScoreRender(){
@@ -1355,6 +1377,9 @@ document.getElementById('btnDelM').addEventListener('click',deleteTabMeasure);
 document.getElementById('btnPlay').addEventListener('click', startPlayback);
 document.getElementById('btnStop').addEventListener('click', stopPlayback);
 document.getElementById('btnPDF').addEventListener('click', exportPDF);
+document.getElementById('btnExportAscii').addEventListener('click',exportAsciiTab);
+document.getElementById('btnImportAscii').addEventListener('click',()=>document.getElementById('asciiFileInput').click());
+document.getElementById('asciiFileInput').addEventListener('change',event=>{const file=event.target.files?.[0];if(file)importAsciiTab(file);event.target.value='';});
 document.getElementById('btnUndo').addEventListener('click',undoTabEdit);
 document.getElementById('btnRedo').addEventListener('click',redoTabEdit);
 document.getElementById('trackSel').addEventListener('change',event=>activateTrack(event.target.value));
