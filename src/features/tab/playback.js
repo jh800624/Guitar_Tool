@@ -17,9 +17,12 @@ export function createBeatTimeline({ measures, tuning, bpm, fromMeasure = 0, toM
       if (tempoEvent) currentTempo = tempoEvent.bpm;
       if (beatIndex === 0) measureTempo = currentTempo;
       const duration = beatDuration(beat) * (60 / currentTempo);
-      const notes = !beat.isRest && beat.technique !== 'mute'
-        ? (beat.strings ?? []).map((note) => tuning[note.string - 1] + note.fret).filter(Number.isFinite) : [];
-      timeline.push({ time, duration, measureIndex, beatIndex, bpm: currentTempo, notes });
+      const effects = beat.effects ?? [];
+      const notes = !beat.isRest && beat.technique !== 'mute' && !effects.includes('dead_note')
+        ? (beat.strings ?? []).map((note) => tuning[note.string - 1] + note.fret + (beat.technique === 'harmonic' ? 12 : 0)).filter(Number.isFinite) : [];
+      const soundDuration = effects.includes('palm_mute') ? Math.min(duration * .45, .18)
+        : effects.includes('let_ring') ? Math.min(duration * 3, 3) : duration;
+      timeline.push({ time, duration, soundDuration, measureIndex, beatIndex, bpm: currentTempo, technique: beat.technique, effects, notes });
       time += duration;
     }
     measureStarts.push({ time: measureStart, measureIndex, bpm: measureTempo, timeSig: measure.timeSig });
@@ -85,7 +88,7 @@ export function createTabPlayback({ getContext, pluck, metronomeClick = () => nu
     if (!events.length) return;
     playing = true;
     onState({ playing: true, reason: 'started', fromMeasure: startMeasure });
-    events.forEach((event) => event.notes.forEach((midi) => scheduledNodes.push(pluck(midi, event.time, event.duration))));
+    events.forEach((event) => event.notes.forEach((midi) => scheduledNodes.push(pluck(midi, event.time, event.soundDuration, { technique: event.technique, effects: event.effects }))));
     if (metronome) createMetronomeTimeline(measureStarts).forEach((event) => {
       const node = metronomeClick(event.accent, event.time); if (node) scheduledNodes.push(node);
     });

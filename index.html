@@ -443,9 +443,18 @@
         <button class="tech-btn" data-tech="slide_up">/<span>slide↑</span></button>
         <button class="tech-btn" data-tech="slide_down">\<span>slide↓</span></button>
         <button class="tech-btn" data-tech="bend">b<span>bend</span></button>
+        <button class="tech-btn" data-tech="release">r<span>release</span></button>
+        <button class="tech-btn" data-tech="harmonic">◇<span>harmonic</span></button>
         <button class="tech-btn" data-tech="vibrato">~<span>vibrato</span></button>
+        <button class="tech-btn" data-tech="tapping">T<span>tapping</span></button>
         <button class="tech-btn" data-tech="mute">x<span>mute</span></button>
         <button class="tech-btn r" id="btnClearTech">清除<span>clear</span></button>
+      </div>
+      <div class="sec-title" style="margin-top:10px;margin-bottom:6px">可疊加效果</div>
+      <div class="tbtn-row">
+        <button class="tbtn effect-btn" data-effect="palm_mute">P.M.</button>
+        <button class="tbtn effect-btn" data-effect="let_ring">Let ring</button>
+        <button class="tbtn effect-btn" data-effect="dead_note">Dead note</button>
       </div>
     </div>
 
@@ -830,7 +839,7 @@ buildBoard();
    PROFESSIONAL TAB EDITOR
 ════════════════════════════════════════════════════════ */
 const DUR_BEATS  = { w:4, h:2, q:1, '8':.5, '16':.25 };
-const TECH_LABEL = { h:'h', p:'p', slide_up:'/', slide_down:'\\', bend:'b', vibrato:'~', mute:'x' };
+const TECH_LABEL = { h:'h', p:'p', slide_up:'/', slide_down:'\\', bend:'b', release:'r', harmonic:'harm.', vibrato:'~', tapping:'T', mute:'x' };
 const MEASURES_PER_LINE = 4;
 const LINE_H = 190;
 const SCORE_W_MAX = 920; // max SVG width
@@ -976,6 +985,12 @@ function updateCursorUI(){
   document.getElementById('measureCount').textContent=tabMeasures.length;
   document.getElementById('timeSigSel').value=tabMeasures[tabCursor.m].timeSig;
   syncMeasureStructureUI();
+  syncTechniqueUI();
+}
+function syncTechniqueUI(){
+  const beat=tabMeasures[tabCursor.m].beats[tabCursor.b];
+  document.querySelectorAll('.tech-btn[data-tech]').forEach(button=>button.classList.toggle('active',button.dataset.tech===beat.technique));
+  document.querySelectorAll('.effect-btn').forEach(button=>button.classList.toggle('active',(beat.effects||[]).includes(button.dataset.effect)));
 }
 function syncMeasureStructureUI(){
   const measure=tabMeasures[tabCursor.m];
@@ -1041,11 +1056,18 @@ function applyTechnique(tech){
   } else {
     beat.technique=tech;
     document.querySelectorAll('.tech-btn[data-tech]').forEach(b=>b.classList.toggle('active',b.dataset.tech===tech));
-    const nm={h:'Hammer-on',p:'Pull-off',slide_up:'Slide Up',slide_down:'Slide Down',bend:'Bend',vibrato:'Vibrato',mute:'Mute'};
+    const nm={h:'Hammer-on',p:'Pull-off',slide_up:'Slide Up',slide_down:'Slide Down',bend:'Bend',release:'Release',harmonic:'Harmonic',vibrato:'Vibrato',tapping:'Tapping',mute:'Mute'};
     setStatus(`套用：${nm[tech]||tech}`);
   }
   finishTabEdit(tech===null?'清除技巧':'套用技巧');
   requestScoreRender();saveTabStore();
+}
+function toggleEffect(effect){
+  const beat=tabMeasures[tabCursor.m].beats[tabCursor.b];
+  checkpointTabEdit();
+  const effects=new Set(beat.effects||[]);effects.has(effect)?effects.delete(effect):effects.add(effect);beat.effects=[...effects];
+  finishTabEdit(`切換 ${effect}`);document.querySelectorAll('.effect-btn').forEach(button=>button.classList.toggle('active',(beat.effects||[]).includes(button.dataset.effect)));
+  requestScoreRender();saveTabStore();setStatus(`已切換：${effect}`);
 }
 function toggleRhythmField(field,value,label){
   const beat=tabMeasures[tabCursor.m].beats[tabCursor.b];
@@ -1187,9 +1209,10 @@ function buildVFNotes(measure,voiceIndex=tabVoice,stemDirection=1){
     catch(e){
       note=new TabNote({positions:[{str:3,fret:'0'}],duration:'q',draw_stem:true,stem_direction:stemDirection});
     }
-    if(beat.technique&&TECH_LABEL[beat.technique]){
+    const markings=[beat.technique&&TECH_LABEL[beat.technique],...(beat.effects||[]).map(effect=>({palm_mute:'P.M.',let_ring:'let ring',dead_note:'x'}[effect])).filter(Boolean)];
+    if(markings.length){
       try{
-        const ann=new Annotation(TECH_LABEL[beat.technique]);
+        const ann=new Annotation(markings.join(' '));
         ann.setFont('Courier Prime, monospace',10,'bold');
         ann.setVerticalJustification(Annotation.VerticalJustify.BOTTOM);
         note.addModifier(ann,0);
@@ -1356,6 +1379,7 @@ document.querySelectorAll('.dur-btn').forEach(btn=>{
 document.querySelectorAll('.tech-btn[data-tech]').forEach(btn=>{
   btn.addEventListener('click',()=>applyTechnique(btn.dataset.tech));
 });
+document.querySelectorAll('.effect-btn').forEach(btn=>btn.addEventListener('click',()=>toggleEffect(btn.dataset.effect)));
 document.getElementById('btnClearTech').addEventListener('click',()=>applyTechnique(null));
 document.getElementById('btnDot').addEventListener('click',()=>toggleRhythmField('dots',1,'切換附點'));
 document.getElementById('btnTie').addEventListener('click',()=>toggleRhythmField('tie',true,'切換 Tie'));

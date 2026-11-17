@@ -54,6 +54,18 @@ test('playback timeline observes tempo, rests, mutes and string tuning', () => {
   assert.equal(endTime, 1.25);
 });
 
+test('guitar articulations alter playback pitch and sustain without changing score time', () => {
+  const { events } = createBeatTimeline({ measures: [{ beats: [
+    { duration: 'q', technique: 'harmonic', strings: [{ string: 1, fret: 0 }] },
+    { duration: 'q', effects: ['palm_mute'], strings: [{ string: 1, fret: 0 }] },
+    { duration: 'q', effects: ['let_ring'], strings: [{ string: 1, fret: 0 }] },
+  ] }], tuning: [64], bpm: 120 });
+  assert.equal(events[0].notes[0], 76);
+  assert.equal(events[1].duration, .5);
+  assert.equal(events[1].soundDuration, .18);
+  assert.equal(events[2].soundDuration, 1.5);
+});
+
 test('dotted and tuplet notes share timing rules across the score and playback', () => {
   const dottedQuarter = { duration: 'q', dots: 1 };
   const tripletQuarter = { duration: 'q', tuplet: { actual: 3, normal: 2 } };
