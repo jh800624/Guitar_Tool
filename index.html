@@ -1364,8 +1364,8 @@ async function exportPDF(){
       // Compute widths for this PDF line
       const mStart=line*MEASURES_PER_LINE,mEnd=Math.min(mStart+MEASURES_PER_LINE,tabMeasures.length);
       const pdfLineW=SCORE_W_MAX;
-      const pdfStaveWidths=Array.from({length:mEnd-mStart},()=>Math.floor(pdfLineW/(mEnd-mStart)));
-      pdfStaveWidths[pdfStaveWidths.length-1]+=pdfLineW-pdfStaveWidths.reduce((sum,width)=>sum+width,0);
+      const pdfStaveWidths=Array.from({length:mEnd-mStart},()=>Math.floor(pdfLineW/MEASURES_PER_LINE));
+      if(pdfStaveWidths.length===MEASURES_PER_LINE)pdfStaveWidths[pdfStaveWidths.length-1]+=pdfLineW-pdfStaveWidths.reduce((sum,width)=>sum+width,0);
       const renderer=new Renderer(div,Renderer.Backends.SVG);
       renderer.resize(pdfLineW,LINE_H);
       const ctx=renderer.getContext();

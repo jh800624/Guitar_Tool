@@ -1,3 +1,12 @@
+export function equalMeasureWidths(totalWidth, count, slots = count) {
+  const visibleCount = Math.max(1, count);
+  const slotCount = Math.max(visibleCount, slots);
+  const baseWidth = Math.floor(totalWidth / slotCount);
+  const widths = Array.from({ length: visibleCount }, () => baseWidth);
+  if (visibleCount === slotCount) widths[widths.length - 1] += totalWidth - baseWidth * slotCount;
+  return widths;
+}
+
 export function createScoreRenderer({ vf, buildNotes, buildNotationNotes = () => [], calcStaveWidth, options }) {
   const { Renderer, Stave, TabStave, Voice, Formatter, Beam } = vf;
   const { maxWidth, lineHeight, clefWidth, marginWidth } = options;
@@ -28,8 +37,7 @@ export function createScoreRenderer({ vf, buildNotes, buildNotationNotes = () =>
 
     scoreLayout.lines.forEach((line, lineIndex) => {
       const yBase = lineIndex * lineHeight + 35;
-      const staveWidths = line.map(() => Math.floor(scoreLayout.width / line.length));
-      staveWidths[staveWidths.length - 1] += scoreLayout.width - staveWidths.reduce((sum, value) => sum + value, 0);
+      const staveWidths = equalMeasureWidths(scoreLayout.width, line.length, options.measuresPerLine ?? 4);
       let xOffset = 0;
       line.forEach((measureIndex, positionInLine) => {
         const measure = measures[measureIndex], first = positionInLine === 0, staveWidth = staveWidths[positionInLine];

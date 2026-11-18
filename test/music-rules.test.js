@@ -6,7 +6,7 @@ import { activeTrack, addTrack, createScoreDocument, migrateStoredTab, setActive
 import { createCommandHistory } from '../src/core/command-history.js';
 import { createDebouncedWriter } from '../src/core/debounced-writer.js';
 import { createBeatTimeline, createMeasureSequence, createMetronomeTimeline, createPlaybackMix } from '../src/features/tab/playback.js';
-import { createScoreRenderer } from '../src/features/tab/score-renderer.js';
+import { createScoreRenderer, equalMeasureWidths } from '../src/features/tab/score-renderer.js';
 import { parseAsciiTab, serializeAsciiTab } from '../src/features/tab/ascii-tab.js';
 import { createMidiFile, parseMidiFile, parseMusicXml, serializeMusicXml } from '../src/features/tab/interchange.js';
 
@@ -145,6 +145,11 @@ test('renderer layout wraps measures and records their line index without a brow
   const result = renderer.layout([{ beats: [] }, { beats: [] }, { beats: [] }]);
   assert.deepEqual(result.lines, [[0, 1], [2]]);
   assert.equal(result.measureLineIndex[2], 1);
+});
+
+test('full score systems use four identical measure widths', () => {
+  assert.deepEqual(equalMeasureWidths(920, 4, 4), [230, 230, 230, 230]);
+  assert.deepEqual(equalMeasureWidths(920, 2, 4), [230, 230]);
 });
 
 test('score document switches active tracks without sharing measures', () => {
