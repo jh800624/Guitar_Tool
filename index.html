@@ -853,7 +853,7 @@ buildBoard();
 const DUR_BEATS  = { w:4, h:2, q:1, '8':.5, '16':.25 };
 const TECH_LABEL = { h:'h', p:'p', slide_up:'/', slide_down:'\\', bend:'b', release:'r', harmonic:'harm.', vibrato:'~', tapping:'T', mute:'x' };
 const MEASURES_PER_LINE = 4;
-const LINE_H = 190;
+const LINE_H = 140;
 const A4_TEMPLATE_MEASURES = 24;
 const SCORE_W_MAX = 920; // max SVG width
 const CLEF_W = 88;       // space taken by clef + time sig in first measure
@@ -1248,7 +1248,6 @@ function renderScore(){
   tabScoreRenderer ??= window.GuitarTool.createScoreRenderer({
     vf:Vex.Flow,
     buildNotes:(measure,voiceIndex,stemDirection)=>buildVFNotes(measure,voiceIndex,stemDirection),
-    buildNotationNotes:(measure,voiceIndex,stemDirection)=>buildVFStaveNotes(measure,voiceIndex,stemDirection),
     calcStaveWidth:calcStaveW,
     options:{maxWidth:SCORE_W_MAX,lineHeight:LINE_H,clefWidth:CLEF_W,marginWidth:MARGIN_W}
   });
@@ -1357,7 +1356,7 @@ async function exportPDF(){
     pdf.setFont('helvetica','normal');pdf.setFontSize(10);pdf.setTextColor(120);
     pdf.text((artist?artist+'   ·   ':'')+`Key = ${key}   ·   BPM = ${bpm}`,PW/2,MT-3,{align:'center'});
     pdf.setTextColor(0);pdf.setDrawColor(200);pdf.setLineWidth(.3);pdf.line(ML,MT,PW-ML,MT);
-    const{Renderer,Stave,TabNote,TabStave,Voice,Formatter,Annotation,Beam}=Vex.Flow;
+    const{Renderer,TabNote,TabStave,Voice,Formatter,Annotation,Beam}=Vex.Flow;
     const totalLines=Math.ceil(tabMeasures.length/MEASURES_PER_LINE);
     let curY=MT+4,pageNum=1;
     for(let line=0;line<totalLines;line++){
@@ -1376,17 +1375,14 @@ async function exportPDF(){
       let xOff=0;
       for(let i=0;i<mEnd-mStart;i++){
         const mi=mStart+i,measure=tabMeasures[mi],isFirst=i===0,staveW=pdfStaveWidths[i];
-        const notationStave=new Stave(xOff,15,staveW-4);
-        const stave=new TabStave(xOff,77,staveW-4);
+        const stave=new TabStave(xOff,25,staveW-4);
         if(isFirst){
-          notationStave.addClef('treble');stave.addClef('tab');const[n,d]=measure.timeSig.split('/').map(Number);
-          notationStave.addTimeSignature(`${n}/${d}`);stave.addTimeSignature(`${n}/${d}`);
+          stave.addClef('tab');const[n,d]=measure.timeSig.split('/').map(Number);
+          stave.addTimeSignature(`${n}/${d}`);
         }
-        notationStave.setContext(ctx).draw();
         stave.setContext(ctx).draw();
         ctx.save();ctx.setFont('Arial',8);ctx.setFillStyle('#999');ctx.fillText(`${mi+1}`,xOff+3,12);ctx.restore();
         const vfNotes=buildVFNotes(measure,0,1);
-        const notationNotes=buildVFStaveNotes(measure,0,1);
         if(vfNotes.length>0){
           try{
             const[n,d]=measure.timeSig.split('/').map(Number);
@@ -1396,14 +1392,6 @@ async function exportPDF(){
             voice.draw(ctx,stave);
             const beamGroups=Beam.generateBeams(vfNotes);
             beamGroups.forEach(beam=>beam.setContext(ctx).draw());
-          }catch(e){}
-        }
-        if(notationNotes.length){
-          try{
-            const[n,d]=measure.timeSig.split('/').map(Number);
-            const voice=new Voice({numBeats:n,beatValue:d});
-            voice.setMode(Voice.Mode.SOFT);voice.addTickables(notationNotes);
-            new Formatter().joinVoices([voice]).format([voice],staveW-(isFirst?CLEF_W+4:MARGIN_W+4));voice.draw(ctx,notationStave);
           }catch(e){}
         }
         xOff+=staveW;
