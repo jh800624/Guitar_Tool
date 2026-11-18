@@ -8,7 +8,7 @@ import { createDebouncedWriter } from '../src/core/debounced-writer.js';
 import { createBeatTimeline, createMeasureSequence, createMetronomeTimeline, createPlaybackMix } from '../src/features/tab/playback.js';
 import { createScoreRenderer } from '../src/features/tab/score-renderer.js';
 import { parseAsciiTab, serializeAsciiTab } from '../src/features/tab/ascii-tab.js';
-import { createMidiFile, serializeMusicXml } from '../src/features/tab/interchange.js';
+import { createMidiFile, parseMidiFile, parseMusicXml, serializeMusicXml } from '../src/features/tab/interchange.js';
 
 test('C, E, G is recognised as C major', () => {
   assert.equal(analyseChord([0, 4, 7], 'C', 0).label, 'Cmaj');
@@ -133,6 +133,10 @@ test('MIDI and MusicXML exports retain tempo, guitar string and fret data', () =
   assert.match(xml, /work-title>A &amp; B/);
   assert.match(xml, /<string>1<\/string><fret>3<\/fret>/);
   assert.match(xml, /per-minute>90/);
+  const importedXml = parseMusicXml(xml, [64, 59, 55, 50, 45, 40]);
+  assert.equal(importedXml.measures[0].beats[0].strings[0].fret, 3);
+  const importedMidi = parseMidiFile(midi, [64, 59, 55, 50, 45, 40]);
+  assert.equal(importedMidi.measures[0].beats[0].strings[0].fret, 3);
 });
 
 test('renderer layout wraps measures and records their line index without a browser', () => {

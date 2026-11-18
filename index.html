@@ -492,8 +492,12 @@
       <button class="tbtn b full" id="btnPDF">匯出 PDF</button>
       <button class="tbtn full" id="btnExportMidi">匯出 MIDI</button>
       <button class="tbtn full" id="btnExportMusicXml">匯出 MusicXML</button>
+      <button class="tbtn full" id="btnImportMidi">匯入 MIDI</button>
+      <button class="tbtn full" id="btnImportMusicXml">匯入 MusicXML</button>
       <button class="tbtn full" id="btnExportAscii">匯出 ASCII TAB</button>
       <button class="tbtn full" id="btnImportAscii">匯入 ASCII TAB</button>
+      <input type="file" id="midiFileInput" accept=".mid,.midi,audio/midi" hidden>
+      <input type="file" id="musicXmlFileInput" accept=".musicxml,.xml,application/xml,text/xml" hidden>
       <input type="file" id="asciiFileInput" accept=".txt,.tab,text/plain" hidden>
       <button class="tbtn r full" id="btnClearAll">清除全部</button>
     </div>
@@ -1192,6 +1196,26 @@ async function importAsciiTab(file){
     requestScoreRender();updateCursorUI();saveTabStore({flush:true});setStatus(`已匯入 ${tabMeasures.length} 小節；時值預設為四分音符`);
   }catch(error){setStatus('ASCII 匯入失敗：'+error.message,'err');}
 }
+function applyImportedScore(imported,label){
+  const before=cloneTabValue(tabMeasures);setTabMeasures(imported.measures);
+  recordMeasureReplacement(before,tabMeasures,label);tabCursor={m:0,b:0,s:1};
+  if(Number.isFinite(imported.bpm)){scoreDocument.metadata.bpm=imported.bpm;document.getElementById('bpmInput').value=imported.bpm;}
+  requestScoreRender();updateCursorUI();saveTabStore({flush:true});
+}
+async function importMidi(file){
+  try{
+    const track=window.GuitarTool.scoreDocument.activeTrack(scoreDocument);
+    const imported=window.GuitarTool.interchange.parseMidiFile(await file.arrayBuffer(),track.tuning);
+    applyImportedScore(imported,'匯入 MIDI');setStatus(`已匯入 MIDI：${tabMeasures.length} 小節${imported.skippedNotes?`，略過 ${imported.skippedNotes} 個無法對映的音符`:''}`);
+  }catch(error){setStatus('MIDI 匯入失敗：'+error.message,'err');}
+}
+async function importMusicXml(file){
+  try{
+    const track=window.GuitarTool.scoreDocument.activeTrack(scoreDocument);
+    const imported=window.GuitarTool.interchange.parseMusicXml(await file.text(),track.tuning);
+    applyImportedScore(imported,'匯入 MusicXML');setStatus(`已匯入 MusicXML：${tabMeasures.length} 小節`);
+  }catch(error){setStatus('MusicXML 匯入失敗：'+error.message,'err');}
+}
 
 /* ── VexFlow Renderer ── */
 const scoreRenderScheduler=window.GuitarTool.createRenderScheduler(renderScore);
@@ -1434,9 +1458,13 @@ document.getElementById('btnStop').addEventListener('click', stopPlayback);
 document.getElementById('btnPDF').addEventListener('click', exportPDF);
 document.getElementById('btnExportMidi').addEventListener('click',exportMidi);
 document.getElementById('btnExportMusicXml').addEventListener('click',exportMusicXml);
+document.getElementById('btnImportMidi').addEventListener('click',()=>document.getElementById('midiFileInput').click());
+document.getElementById('btnImportMusicXml').addEventListener('click',()=>document.getElementById('musicXmlFileInput').click());
 document.getElementById('btnExportAscii').addEventListener('click',exportAsciiTab);
 document.getElementById('btnImportAscii').addEventListener('click',()=>document.getElementById('asciiFileInput').click());
 document.getElementById('asciiFileInput').addEventListener('change',event=>{const file=event.target.files?.[0];if(file)importAsciiTab(file);event.target.value='';});
+document.getElementById('midiFileInput').addEventListener('change',event=>{const file=event.target.files?.[0];if(file)importMidi(file);event.target.value='';});
+document.getElementById('musicXmlFileInput').addEventListener('change',event=>{const file=event.target.files?.[0];if(file)importMusicXml(file);event.target.value='';});
 document.getElementById('btnUndo').addEventListener('click',undoTabEdit);
 document.getElementById('btnRedo').addEventListener('click',redoTabEdit);
 document.getElementById('trackSel').addEventListener('change',event=>activateTrack(event.target.value));
