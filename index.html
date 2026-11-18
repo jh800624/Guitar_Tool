@@ -1336,7 +1336,7 @@ async function exportPDF(){
     pdf.setFont('helvetica','normal');pdf.setFontSize(10);pdf.setTextColor(120);
     pdf.text((artist?artist+'   ':'')+`BPM = ${bpm}`,PW/2,MT-3,{align:'center'});
     pdf.setTextColor(0);pdf.setDrawColor(200);pdf.setLineWidth(.3);pdf.line(ML,MT,PW-ML,MT);
-    const{Renderer,TabNote,TabStave,Voice,Formatter,Annotation,Beam}=Vex.Flow;
+    const{Renderer,Stave,TabNote,TabStave,Voice,Formatter,Annotation,Beam}=Vex.Flow;
     const totalLines=Math.ceil(tabMeasures.length/MEASURES_PER_LINE);
     let curY=MT+4,pageNum=1;
     for(let line=0;line<totalLines;line++){
@@ -1355,11 +1355,17 @@ async function exportPDF(){
       let xOff=0;
       for(let i=0;i<mEnd-mStart;i++){
         const mi=mStart+i,measure=tabMeasures[mi],isFirst=i===0,staveW=pdfStaveWidths[i];
-        const stave=new TabStave(xOff,35,staveW-4);
-        if(isFirst){stave.addClef('tab');const[n,d]=measure.timeSig.split('/').map(Number);stave.addTimeSignature(`${n}/${d}`);}
+        const notationStave=new Stave(xOff,15,staveW-4);
+        const stave=new TabStave(xOff,77,staveW-4);
+        if(isFirst){
+          notationStave.addClef('treble');stave.addClef('tab');const[n,d]=measure.timeSig.split('/').map(Number);
+          notationStave.addTimeSignature(`${n}/${d}`);stave.addTimeSignature(`${n}/${d}`);
+        }
+        notationStave.setContext(ctx).draw();
         stave.setContext(ctx).draw();
-        ctx.save();ctx.setFont('Arial',8);ctx.setFillStyle('#999');ctx.fillText(`${mi+1}`,xOff+3,32);ctx.restore();
-        const vfNotes=buildVFNotes(measure,mi);
+        ctx.save();ctx.setFont('Arial',8);ctx.setFillStyle('#999');ctx.fillText(`${mi+1}`,xOff+3,12);ctx.restore();
+        const vfNotes=buildVFNotes(measure,0,1);
+        const notationNotes=buildVFStaveNotes(measure,0,1);
         if(vfNotes.length>0){
           try{
             const[n,d]=measure.timeSig.split('/').map(Number);
@@ -1369,6 +1375,14 @@ async function exportPDF(){
             voice.draw(ctx,stave);
             const beamGroups=Beam.generateBeams(vfNotes);
             beamGroups.forEach(beam=>beam.setContext(ctx).draw());
+          }catch(e){}
+        }
+        if(notationNotes.length){
+          try{
+            const[n,d]=measure.timeSig.split('/').map(Number);
+            const voice=new Voice({numBeats:n,beatValue:d});
+            voice.setMode(Voice.Mode.SOFT);voice.addTickables(notationNotes);
+            new Formatter().joinVoices([voice]).format([voice],staveW-(isFirst?CLEF_W+4:MARGIN_W+4));voice.draw(ctx,notationStave);
           }catch(e){}
         }
         xOff+=staveW;
