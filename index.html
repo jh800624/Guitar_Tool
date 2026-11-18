@@ -144,6 +144,14 @@
     color:var(--muted);margin-bottom:10px;
     display:flex;align-items:center;gap:6px;
   }
+  .sec-toggle{margin-left:auto;border:0;background:transparent;color:inherit;cursor:pointer;font-size:.85rem;padding:2px 6px}
+  .sec.is-collapsed>:not(:first-child){display:none}
+  .sec.is-collapsed>.sec-title{margin-bottom:0}
+  .tab-context-menu{position:fixed;z-index:10000;display:none;max-height:min(80vh,520px);overflow:auto;min-width:190px;padding:6px;background:var(--surface);color:var(--text);border:1px solid var(--border-strong);border-radius:8px;box-shadow:0 8px 24px #0003}
+  .tab-context-menu.open{display:block}
+  .tab-context-menu .menu-heading{padding:6px 8px;color:var(--muted);font-size:.7rem}
+  .tab-context-menu button{display:block;width:100%;border:0;background:transparent;color:inherit;text-align:left;padding:7px 8px;border-radius:4px;cursor:pointer}
+  .tab-context-menu button:hover,.tab-context-menu button:focus{background:var(--border)}
 
 
   /* fields */
@@ -519,6 +527,7 @@
   </div>
 
 </div><!-- /page-tab-editor -->
+<div id="tabContextMenu" class="tab-context-menu" role="menu" aria-label="音符與技巧選單"></div>
 
 <!-- Status bar: only shown in TAB editor page -->
 <div class="statusbar" id="globalStatusbar">
@@ -1319,6 +1328,66 @@ function drawCursorOverlay(){
     cursor:tabCursor
   });
 }
+
+function selectScorePosition(event){
+  const svg=document.querySelector('#scoreContainer svg');
+  if(!svg||!_notePositions.length)return false;
+  const bounds=svg.getBoundingClientRect();
+  const svgWidth=Number(svg.getAttribute('width'))||bounds.width;
+  const svgHeight=Number(svg.getAttribute('height'))||bounds.height;
+  const x=(event.clientX-bounds.left)*svgWidth/bounds.width;
+  const y=(event.clientY-bounds.top)*svgHeight/bounds.height;
+  const lines=Object.entries(_staveStringYs).map(([index,ys])=>({index:Number(index),ys,distance:Math.min(...ys.map(value=>Math.abs(value-y)))}));
+  const line=lines.sort((a,b)=>a.distance-b.distance)[0];
+  if(!line||y<line.ys[0]-18||y>line.ys[5]+18)return false;
+  const candidates=_notePositions.filter(note=>_measureLineIdx[note.mi]===line.index);
+  if(!candidates.length)return false;
+  const closest=candidates.reduce((best,note)=>Math.abs(note.x-x)<Math.abs(best.x-x)?note:best);
+  const stringIndex=line.ys.reduce((best,value,index)=>Math.abs(value-y)<Math.abs(line.ys[best]-y)?index:best,0);
+  tabCursor={m:closest.mi,b:closest.bi,s:stringIndex+1};clampCursor();updateCursorUI();drawCursorOverlay();return true;
+}
+
+function setCurrentDuration(duration){
+  const measure=tabMeasures[tabCursor.m],beat=measure.beats[tabCursor.b];
+  if(!window.GuitarTool.tabModel.canSetDuration(measure,beat,duration)){setStatus(`此時值會超過 ${measure.timeSig} 小節容量`,'warn');return;}
+  checkpointTabEdit();beat.duration=duration;tabSelectedDur=duration;finishTabEdit('變更音符時值');
+  document.querySelectorAll('.dur-btn').forEach(button=>button.classList.toggle('active',button.dataset.dur===duration));
+  requestScoreRender();saveTabStore();setStatus('已變更音符時值');
+}
+
+const tabContextMenu=document.getElementById('tabContextMenu');
+function closeTabContextMenu(){tabContextMenu.classList.remove('open');}
+function openTabContextMenu(event){
+  if(!selectScorePosition(event))return;
+  event.preventDefault();tabContextMenu.replaceChildren();
+  const addHeading=text=>{const heading=document.createElement('div');heading.className='menu-heading';heading.textContent=text;tabContextMenu.appendChild(heading);};
+  const addItem=(text,action)=>{const button=document.createElement('button');button.type='button';button.setAttribute('role','menuitem');button.textContent=text;button.addEventListener('click',()=>{action();closeTabContextMenu();});tabContextMenu.appendChild(button);};
+  addHeading('音符時值');
+  [['全音符','w'],['二分音符','h'],['四分音符','q'],['八分音符','8'],['十六分音符','16']].forEach(([label,duration])=>addItem(label,()=>setCurrentDuration(duration)));
+  addItem('附點',()=>toggleRhythmField('dots',1,'切換附點'));
+  addItem('Tie',()=>toggleRhythmField('tie',true,'切換 Tie'));
+  addItem('三連音',()=>toggleRhythmField('tuplet',{actual:3,normal:2},'切換三連音'));
+  addHeading('吉他技巧');
+  [['Hammer-on','h'],['Pull-off','p'],['Slide 上行','slide_up'],['Slide 下行','slide_down'],['Bend','bend'],['Release','release'],['Harmonic','harmonic'],['Vibrato','vibrato'],['Tapping','tapping'],['Mute','mute']].forEach(([label,tech])=>addItem(label,()=>applyTechnique(tech)));
+  addItem('清除技巧',()=>applyTechnique(null));
+  addHeading('可疊加效果');
+  [['Palm mute','palm_mute'],['Let ring','let_ring'],['Dead note','dead_note']].forEach(([label,effect])=>addItem(label,()=>toggleEffect(effect)));
+  tabContextMenu.classList.add('open');
+  const rect=tabContextMenu.getBoundingClientRect();
+  tabContextMenu.style.left=`${Math.max(0,Math.min(event.clientX,window.innerWidth-rect.width))}px`;
+  tabContextMenu.style.top=`${Math.max(0,Math.min(event.clientY,window.innerHeight-rect.height))}px`;
+}
+
+document.getElementById('scoreContainer').addEventListener('click',event=>{closeTabContextMenu();selectScorePosition(event);});
+document.getElementById('scoreContainer').addEventListener('contextmenu',openTabContextMenu);
+document.addEventListener('pointerdown',event=>{if(!tabContextMenu.contains(event.target))closeTabContextMenu();});
+document.addEventListener('keydown',event=>{if(event.key==='Escape')closeTabContextMenu();});
+document.querySelectorAll('.tab-panel > .sec').forEach(section=>{
+  const title=section.firstElementChild;if(!title?.classList.contains('sec-title'))return;
+  const button=document.createElement('button');button.type='button';button.className='sec-toggle';button.textContent='▾';button.setAttribute('aria-expanded','true');button.setAttribute('aria-label',`收合${title.textContent.trim()}`);
+  button.addEventListener('click',()=>{const collapsed=section.classList.toggle('is-collapsed');button.textContent=collapsed?'▸':'▾';button.setAttribute('aria-expanded',String(!collapsed));});
+  title.appendChild(button);
+});
 
 function refreshTabHeader(){
   const title=document.getElementById('songTitle').value||'Untitled';
