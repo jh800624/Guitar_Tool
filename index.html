@@ -360,6 +360,7 @@
       <div class="field"><label>演奏者</label><input type="text" id="artistName" placeholder="Artist"></div>
       <div class="field-row">
         <div class="field"><label>BPM</label><input type="number" id="bpmInput" value="120" min="20" max="400" style="width:100%"></div>
+        <div class="field"><label>Key</label><select id="songKeySel"><option>C</option><option>Db</option><option>D</option><option>Eb</option><option>E</option><option>F</option><option>Gb</option><option>G</option><option>Ab</option><option>A</option><option>Bb</option><option>B</option><option>Am</option><option>Em</option><option>Bm</option><option>F#m</option><option>C#m</option><option>G#m</option><option>D#m</option><option>A#m</option><option>Dm</option><option>Gm</option><option>Cm</option><option>Fm</option></select></div>
         <div class="field"><label>本小節拍號</label>
           <select id="timeSigSel" style="width:100%">
             <option value="4/4" selected>4/4</option>
@@ -852,6 +853,7 @@ const DUR_BEATS  = { w:4, h:2, q:1, '8':.5, '16':.25 };
 const TECH_LABEL = { h:'h', p:'p', slide_up:'/', slide_down:'\\', bend:'b', release:'r', harmonic:'harm.', vibrato:'~', tapping:'T', mute:'x' };
 const MEASURES_PER_LINE = 4;
 const LINE_H = 190;
+const A4_TEMPLATE_MEASURES = 24;
 const SCORE_W_MAX = 920; // max SVG width
 const CLEF_W = 88;       // space taken by clef + time sig in first measure
 const MARGIN_W = 24;     // left margin in subsequent measures
@@ -878,7 +880,8 @@ let _notePositions = [], _staveStringYs = {}, _measureLineIdx = {};
 
 function makeBeat(dur){ return {duration:dur||tabSelectedDur,dots:0,tie:false,tuplet:null,strings:[],technique:null,effects:[],isRest:false}; }
 function makeMeasure(ts){ return {timeSig:ts||'4/4', beats:[makeBeat('q')]}; }
-tabMeasures = [makeMeasure('4/4')];
+function makeA4Template(ts='4/4'){return Array.from({length:A4_TEMPLATE_MEASURES},()=>makeMeasure(ts));}
+tabMeasures = makeA4Template('4/4');
 let scoreDocument=window.GuitarTool.scoreDocument.createScoreDocument({measures:tabMeasures});
 tabMeasures=window.GuitarTool.scoreDocument.activeTrack(scoreDocument).measures;
 
@@ -943,6 +946,7 @@ function toggleTrackPlaybackFlag(field){
 function syncScoreMetadata(){
   scoreDocument.metadata.title=document.getElementById('songTitle').value||'Untitled';
   scoreDocument.metadata.artist=document.getElementById('artistName').value||'';
+  scoreDocument.metadata.key=document.getElementById('songKeySel').value||'C';
   scoreDocument.metadata.bpm=Number(document.getElementById('bpmInput').value)||120;
 }
 const cloneTabValue=value=>structuredClone(value);
@@ -1158,6 +1162,7 @@ function loadTabStore(){
     tabMeasures=window.GuitarTool.scoreDocument.activeTrack(scoreDocument).measures;
     document.getElementById('songTitle').value=scoreDocument.metadata.title||'Untitled';
     document.getElementById('artistName').value=scoreDocument.metadata.artist||'';
+    document.getElementById('songKeySel').value=scoreDocument.metadata.key||'C';
     document.getElementById('bpmInput').value=scoreDocument.metadata.bpm||120;
     document.getElementById('timeSigSel').value=tabMeasures[0].timeSig;
   }catch(e){
@@ -1233,7 +1238,7 @@ function renderScore(){
     buildNotes:(measure,voiceIndex,stemDirection)=>buildVFNotes(measure,voiceIndex,stemDirection),
     buildNotationNotes:(measure,voiceIndex,stemDirection)=>buildVFStaveNotes(measure,voiceIndex,stemDirection),
     calcStaveWidth:calcStaveW,
-    options:{maxWidth:SCORE_W_MAX,lineHeight:LINE_H,clefWidth:CLEF_W,marginWidth:MARGIN_W}
+    options:{maxWidth:SCORE_W_MAX,lineHeight:LINE_H,clefWidth:CLEF_W,marginWidth:MARGIN_W,measuresPerLine:MEASURES_PER_LINE}
   });
   const layout=tabScoreRenderer.render({container:document.getElementById('scoreContainer'),measures:tabMeasures,cursor:tabCursor,activeVoice:tabVoice});
   _notePositions=layout.notePositions.map(({measureIndex,beatIndex,x})=>({mi:measureIndex,bi:beatIndex,x}));
@@ -1305,9 +1310,10 @@ function drawCursorOverlay(){
 function refreshTabHeader(){
   const title=document.getElementById('songTitle').value||'Untitled';
   const artist=document.getElementById('artistName').value;
+  const key=document.getElementById('songKeySel').value||'C';
   const bpm=document.getElementById('bpmInput').value;
   document.getElementById('dispTitle').textContent=title;
-  document.getElementById('dispSub').textContent=(artist?artist+'   ·   ':'')+`♩ = ${bpm}`;
+  document.getElementById('dispSub').textContent=(artist?artist+'   ·   ':'')+`Key: ${key}   ·   ♩ = ${bpm}`;
   document.getElementById('measureCount').textContent=tabMeasures.length;
 }
 
@@ -1329,12 +1335,13 @@ async function exportPDF(){
     const { jsPDF } = await import('jspdf');
     const title=document.getElementById('songTitle').value||'Untitled';
     const artist=document.getElementById('artistName').value;
+    const key=document.getElementById('songKeySel').value||'C';
     const bpm=document.getElementById('bpmInput').value;
     const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-    const PW=210,PH=297,ML=12,MT=28;const CW=PW-2*ML;
+    const PW=210,PH=297,ML=16,MT=26;const CW=PW-2*ML;
     pdf.setFont('helvetica','bold');pdf.setFontSize(20);pdf.text(title,PW/2,MT-10,{align:'center'});
     pdf.setFont('helvetica','normal');pdf.setFontSize(10);pdf.setTextColor(120);
-    pdf.text((artist?artist+'   ':'')+`BPM = ${bpm}`,PW/2,MT-3,{align:'center'});
+    pdf.text((artist?artist+'   ·   ':'')+`Key = ${key}   ·   BPM = ${bpm}`,PW/2,MT-3,{align:'center'});
     pdf.setTextColor(0);pdf.setDrawColor(200);pdf.setLineWidth(.3);pdf.line(ML,MT,PW-ML,MT);
     const{Renderer,Stave,TabNote,TabStave,Voice,Formatter,Annotation,Beam}=Vex.Flow;
     const totalLines=Math.ceil(tabMeasures.length/MEASURES_PER_LINE);
@@ -1511,14 +1518,14 @@ document.getElementById('trackName').addEventListener('input',event=>{
 document.getElementById('btnClearAll').addEventListener('click',()=>{
   if(!confirm('確定清除全部？'))return;
   const before=cloneTabValue(tabMeasures);
-  setTabMeasures([makeMeasure(document.getElementById('timeSigSel').value)]);
+  setTabMeasures(makeA4Template(document.getElementById('timeSigSel').value));
   recordMeasureReplacement(before,tabMeasures,'清除樂譜');
   tabCursor={m:0,b:0,s:1};
   document.getElementById('fretInput').value='';
   requestScoreRender();updateCursorUI();saveTabStore();setStatus('已清除');
 });
 
-['songTitle','artistName','bpmInput'].forEach(id=>{
+['songTitle','artistName','bpmInput','songKeySel'].forEach(id=>{
   document.getElementById(id).addEventListener('input',()=>{refreshTabHeader();saveTabStore();});
 });
 document.getElementById('timeSigSel').addEventListener('change',()=>{

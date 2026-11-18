@@ -8,7 +8,7 @@ export function createScoreRenderer({ vf, buildNotes, buildNotationNotes = () =>
     measures.forEach((measure, measureIndex) => {
       const first = line.length === 0;
       const measureWidth = calcStaveWidth(measure, first);
-      if (line.length && width + measureWidth > maxWidth) {
+      if (line.length === (options.measuresPerLine ?? 4)) {
         lines.push(line); line = [measureIndex]; width = calcStaveWidth(measure, true);
       } else { line.push(measureIndex); width += measureWidth; }
     });

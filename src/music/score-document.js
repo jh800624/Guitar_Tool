@@ -2,6 +2,7 @@ import { DURATIONS, TIME_SIGNATURES, measureCapacity, measureDuration } from './
 
 export const SCORE_SCHEMA_VERSION = 2;
 export const STANDARD_GUITAR_TUNING = [64, 59, 55, 50, 45, 40];
+export const A4_TEMPLATE_MEASURE_COUNT = 24;
 
 export function createBeat(duration = 'q') {
   return { duration, dots: 0, tie: false, tuplet: null, strings: [], technique: null, effects: [], isRest: false };
@@ -17,16 +18,17 @@ export function voiceBeats(measure, voiceIndex = 0) {
   return measure.voices[voiceIndex].beats;
 }
 
-export function createTrack({ name = 'Guitar', tuning = STANDARD_GUITAR_TUNING, measures = [createMeasure()], muted = false, solo = false } = {}) {
+export function createTrack({ name = 'Guitar', tuning = STANDARD_GUITAR_TUNING, measures = Array.from({ length: A4_TEMPLATE_MEASURE_COUNT }, () => createMeasure()), muted = false, solo = false } = {}) {
   const normalizedMeasures = measures.map(normalizeMeasure);
   return { id: crypto.randomUUID(), name, instrument: 'guitar', tuning: [...tuning], muted: Boolean(muted), solo: Boolean(solo), measures: normalizedMeasures };
 }
 
-export function createScoreDocument({ title = 'Untitled', artist = '', bpm = 120, measures } = {}) {
+export function createScoreDocument({ title = 'Untitled', artist = '', key = 'C', bpm = 120, measures } = {}) {
+  const templateMeasures = Array.from({ length: A4_TEMPLATE_MEASURE_COUNT }, () => createMeasure());
   return {
     schemaVersion: SCORE_SCHEMA_VERSION,
-    metadata: { title, artist, bpm },
-    tracks: [createTrack({ measures: measures?.length ? measures : [createMeasure()] })],
+    metadata: { title, artist, key, bpm },
+    tracks: [createTrack({ measures: measures?.length ? measures : templateMeasures })],
     activeTrackId: null,
   };
 }
@@ -59,7 +61,7 @@ export function cloneScore(score) {
 
 export function migrateStoredTab(saved) {
   if (saved?.schemaVersion === SCORE_SCHEMA_VERSION && saved.score && validateScoreDocument(saved.score)) return cloneScore(saved.score);
-  const score = createScoreDocument({ title: saved?.title, artist: saved?.artist, bpm: saved?.bpm, measures: saved?.measures });
+  const score = createScoreDocument({ title: saved?.title, artist: saved?.artist, key: saved?.key, bpm: saved?.bpm, measures: saved?.measures });
   return score;
 }
 
