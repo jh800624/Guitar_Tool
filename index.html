@@ -536,8 +536,8 @@ let Vex = null;
 let notationLoad = null;
 function ensureNotation(){
   if(Vex)return Promise.resolve(Vex);
-  notationLoad ??= import('vexflow').then(({Annotation,Beam,Formatter,Renderer,TabNote,TabStave,Voice})=>{
-    Vex={Flow:{Annotation,Beam,Formatter,Renderer,TabNote,TabStave,Voice}};
+  notationLoad ??= import('vexflow').then(({Annotation,Beam,Formatter,Renderer,Stave,StaveNote,TabNote,TabStave,Voice})=>{
+    Vex={Flow:{Annotation,Beam,Formatter,Renderer,Stave,StaveNote,TabNote,TabStave,Voice}};
     return Vex;
   });
   return notationLoad;
@@ -1230,7 +1230,8 @@ function renderScore(){
   }
   tabScoreRenderer ??= window.GuitarTool.createScoreRenderer({
     vf:Vex.Flow,
-    buildNotes:measure=>buildVFNotes(measure),
+    buildNotes:(measure,voiceIndex,stemDirection)=>buildVFNotes(measure,voiceIndex,stemDirection),
+    buildNotationNotes:(measure,voiceIndex,stemDirection)=>buildVFStaveNotes(measure,voiceIndex,stemDirection),
     calcStaveWidth:calcStaveW,
     options:{maxWidth:SCORE_W_MAX,lineHeight:LINE_H,clefWidth:CLEF_W,marginWidth:MARGIN_W}
   });
@@ -1272,6 +1273,18 @@ function buildVFNotes(measure,voiceIndex=tabVoice,stemDirection=1){
     }
     return note;
   }).filter(Boolean);
+}
+function buildVFStaveNotes(measure,voiceIndex=tabVoice,stemDirection=1){
+  const{StaveNote}=Vex.Flow;
+  const tuning=window.GuitarTool.scoreDocument.activeTrack(scoreDocument).tuning;
+  const names=['c','c#','d','d#','e','f','f#','g','g#','a','a#','b'];
+  const beats=measure.voices?.[voiceIndex]?.beats??measure.beats;
+  return beats.map(beat=>{
+    const midis=(beat.isRest?[]:beat.strings||[]).map(note=>tuning[note.string-1]+note.fret+(beat.technique==='harmonic'?12:0)).filter(Number.isFinite);
+    const keys=midis.map(midi=>`${names[(midi%12+12)%12]}/${Math.floor(midi/12)-1}`);
+    try{return new StaveNote({keys:keys.length?keys:['b/4'],duration:keys.length?beat.duration:`${beat.duration}r`,stem_direction:stemDirection});}
+    catch(e){return new StaveNote({keys:['b/4'],duration:'qr',stem_direction:stemDirection});}
+  });
 }
 
 /* ── Cursor Overlay (uses getYForLine data) ── */
