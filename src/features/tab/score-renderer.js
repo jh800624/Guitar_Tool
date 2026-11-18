@@ -1,9 +1,8 @@
 export function equalMeasureWidths(totalWidth, count, slots = count) {
   const visibleCount = Math.max(1, count);
   const slotCount = Math.max(visibleCount, slots);
-  const baseWidth = Math.floor(totalWidth / slotCount);
+  const baseWidth = totalWidth / slotCount;
   const widths = Array.from({ length: visibleCount }, () => baseWidth);
-  if (visibleCount === slotCount) widths[widths.length - 1] += totalWidth - baseWidth * slotCount;
   return widths;
 }
 
@@ -13,11 +12,12 @@ export function createScoreRenderer({ vf, buildNotes, buildNotationNotes = () =>
 
   function layout(measures) {
     const lines = [];
-    let line = [];
+    let line = [], lineWidth = 0;
     measures.forEach((measure, measureIndex) => {
-      if (line.length === (options.measuresPerLine ?? 4)) {
-        lines.push(line); line = [measureIndex];
-      } else line.push(measureIndex);
+      const measureWidth = calcStaveWidth(measure, line.length === 0);
+      if (line.length && lineWidth + measureWidth > maxWidth) {
+        lines.push(line); line = [measureIndex]; lineWidth = calcStaveWidth(measure, true);
+      } else { line.push(measureIndex); lineWidth += measureWidth; }
     });
     if (line.length) lines.push(line);
     const measureLineIndex = {};
@@ -37,7 +37,7 @@ export function createScoreRenderer({ vf, buildNotes, buildNotationNotes = () =>
 
     scoreLayout.lines.forEach((line, lineIndex) => {
       const yBase = lineIndex * lineHeight + 35;
-      const staveWidths = equalMeasureWidths(scoreLayout.width, line.length, options.measuresPerLine ?? 4);
+      const staveWidths = equalMeasureWidths(scoreLayout.width, line.length, line.length);
       let xOffset = 0;
       line.forEach((measureIndex, positionInLine) => {
         const measure = measures[measureIndex], first = positionInLine === 0, staveWidth = staveWidths[positionInLine];

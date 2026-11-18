@@ -141,15 +141,15 @@ test('MIDI and MusicXML exports retain tempo, guitar string and fret data', () =
 
 test('renderer layout wraps measures and records their line index without a browser', () => {
   const renderer = createScoreRenderer({ vf: {}, buildNotes: () => [], calcStaveWidth: () => 80,
-    options: { maxWidth: 180, lineHeight: 100, clefWidth: 0, marginWidth: 0, measuresPerLine: 2 } });
+    options: { maxWidth: 180, lineHeight: 100, clefWidth: 0, marginWidth: 0 } });
   const result = renderer.layout([{ beats: [] }, { beats: [] }, { beats: [] }]);
   assert.deepEqual(result.lines, [[0, 1], [2]]);
   assert.equal(result.measureLineIndex[2], 1);
 });
 
-test('full score systems use four identical measure widths', () => {
+test('score systems use identical widths for the measures that fit a line', () => {
   assert.deepEqual(equalMeasureWidths(920, 4, 4), [230, 230, 230, 230]);
-  assert.deepEqual(equalMeasureWidths(920, 2, 4), [230, 230]);
+  assert.equal(new Set(equalMeasureWidths(920, 6, 6)).size, 1);
 });
 
 test('score document switches active tracks without sharing measures', () => {

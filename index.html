@@ -1249,7 +1249,7 @@ function renderScore(){
     buildNotes:(measure,voiceIndex,stemDirection)=>buildVFNotes(measure,voiceIndex,stemDirection),
     buildNotationNotes:(measure,voiceIndex,stemDirection)=>buildVFStaveNotes(measure,voiceIndex,stemDirection),
     calcStaveWidth:calcStaveW,
-    options:{maxWidth:SCORE_W_MAX,lineHeight:LINE_H,clefWidth:CLEF_W,marginWidth:MARGIN_W,measuresPerLine:MEASURES_PER_LINE}
+    options:{maxWidth:SCORE_W_MAX,lineHeight:LINE_H,clefWidth:CLEF_W,marginWidth:MARGIN_W}
   });
   const layout=tabScoreRenderer.render({container:document.getElementById('scoreContainer'),measures:tabMeasures,cursor:tabCursor,activeVoice:tabVoice});
   _notePositions=layout.notePositions.map(({measureIndex,beatIndex,x})=>({mi:measureIndex,bi:beatIndex,x}));
