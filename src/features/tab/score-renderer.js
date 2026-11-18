@@ -4,19 +4,16 @@ export function createScoreRenderer({ vf, buildNotes, buildNotationNotes = () =>
 
   function layout(measures) {
     const lines = [];
-    let line = [], width = 0;
+    let line = [];
     measures.forEach((measure, measureIndex) => {
-      const first = line.length === 0;
-      const measureWidth = calcStaveWidth(measure, first);
       if (line.length === (options.measuresPerLine ?? 4)) {
-        lines.push(line); line = [measureIndex]; width = calcStaveWidth(measure, true);
-      } else { line.push(measureIndex); width += measureWidth; }
+        lines.push(line); line = [measureIndex];
+      } else line.push(measureIndex);
     });
     if (line.length) lines.push(line);
     const measureLineIndex = {};
     lines.forEach((items, lineIndex) => items.forEach((measureIndex) => { measureLineIndex[measureIndex] = lineIndex; }));
-    const widest = Math.max(...lines.map((items) => items.reduce((sum, measureIndex, index) => sum + calcStaveWidth(measures[measureIndex], index === 0), 0)));
-    return { lines, measureLineIndex, width: Math.min(maxWidth, Math.max(400, widest + 10)), height: lines.length * lineHeight + 30 };
+    return { lines, measureLineIndex, width: maxWidth, height: lines.length * lineHeight + 30 };
   }
 
   function render({ container, measures, cursor, activeVoice = 0 }) {
@@ -31,9 +28,7 @@ export function createScoreRenderer({ vf, buildNotes, buildNotationNotes = () =>
 
     scoreLayout.lines.forEach((line, lineIndex) => {
       const yBase = lineIndex * lineHeight + 35;
-      const rawWidths = line.map((measureIndex, index) => calcStaveWidth(measures[measureIndex], index === 0));
-      const rawTotal = rawWidths.reduce((sum, value) => sum + value, 0);
-      const staveWidths = rawWidths.map((value) => Math.floor(value * scoreLayout.width / rawTotal));
+      const staveWidths = line.map(() => Math.floor(scoreLayout.width / line.length));
       staveWidths[staveWidths.length - 1] += scoreLayout.width - staveWidths.reduce((sum, value) => sum + value, 0);
       let xOffset = 0;
       line.forEach((measureIndex, positionInLine) => {
