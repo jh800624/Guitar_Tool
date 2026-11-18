@@ -268,6 +268,8 @@
     position:absolute;pointer-events:none;
     top:0;left:0;width:100%;height:100%;overflow:hidden;
   }
+  .selection-box{position:absolute;pointer-events:none;border:1px solid #3685ce;background:#3685ce25;z-index:4}
+  .selected-beat{position:absolute;pointer-events:none;background:#3685ce30;border:1px solid #3685ce88;border-radius:4px;z-index:3}
   /* Cursor overlay — always dark since score-wrap is always white */
   .cur-col{
     position:absolute;width:26px;border-radius:3px;
@@ -889,6 +891,7 @@ function calcStaveW(measure, isFirst) {
 }
 
 let tabMeasures = [], tabCursor = {m:0,b:0,s:1}, tabSelectedDur = 'q', tabVoice = 0;
+let selectedBeats=[];
 let _notePositions = [], _staveStringYs = {}, _measureLineIdx = {};
 
 function makeBeat(dur){ return {duration:dur||tabSelectedDur,dots:0,tie:false,tuplet:null,strings:[],technique:null,effects:[],isRest:false}; }
@@ -902,6 +905,7 @@ function setTabMeasures(measures){
   tabMeasures=window.GuitarTool.scoreDocument.replaceActiveMeasures(scoreDocument,measures);
 }
 function activateVoice(voiceIndex){
+  selectedBeats=[];
   tabVoice=voiceIndex;
   tabMeasures.forEach(measure=>{measure.beats=window.GuitarTool.scoreDocument.voiceBeats(measure,tabVoice);});
   clampCursor();updateCursorUI();requestScoreRender();saveTabStore();
@@ -921,6 +925,7 @@ function refreshTrackUI(){
   document.getElementById('btnTrackMute').classList.toggle('active',track.muted);
 }
 function activateTrack(trackId){
+  selectedBeats=[];
   const track=window.GuitarTool.scoreDocument.setActiveTrack(scoreDocument,trackId);
   tabMeasures=track.measures;tabCursor={m:0,b:0,s:1};tabVoice=0;
   document.getElementById('voiceSel').value='0';activateVoice(0);
@@ -1332,6 +1337,14 @@ function drawCursorOverlay(){
     },
     cursor:tabCursor
   });
+  const overlay=document.getElementById('cursorOverlay'),wrap=document.querySelector('.score-wrap');
+  const style=getComputedStyle(wrap),left=parseFloat(style.paddingLeft),top=parseFloat(style.paddingTop);
+  selectedBeats.forEach(({m,b})=>{
+    const pos=_notePositions.find(note=>note.mi===m&&note.bi===b),ys=_staveStringYs[_measureLineIdx[m]];
+    if(!pos||!ys)return;
+    const highlight=document.createElement('div');highlight.className='selected-beat';
+    highlight.style.cssText=`left:${left+pos.x-12}px;top:${top+ys[0]-7}px;width:24px;height:${ys[5]-ys[0]+14}px`;overlay.appendChild(highlight);
+  });
 }
 
 function selectScorePosition(event){
@@ -1353,17 +1366,27 @@ function selectScorePosition(event){
 }
 
 function setCurrentDuration(duration){
-  const measure=tabMeasures[tabCursor.m],beat=measure.beats[tabCursor.b];
-  if(!window.GuitarTool.tabModel.canSetDuration(measure,beat,duration)){setStatus(`此時值會超過 ${measure.timeSig} 小節容量`,'warn');return;}
-  checkpointTabEdit();beat.duration=duration;tabSelectedDur=duration;finishTabEdit('變更音符時值');
+  const targets=selectedBeats.length?selectedBeats:[{m:tabCursor.m,b:tabCursor.b}];
+  if(!window.GuitarTool.tabModel.validateDurationSelection(tabMeasures,targets,duration)){setStatus('變更後會超過小節容量，請縮短其他音符','warn');return;}
+  const indices=[...new Set(targets.map(target=>target.m))];
+  const before=indices.map(index=>cloneTabValue(tabMeasures[index]));
+  targets.forEach(({m,b})=>{tabMeasures[m].beats[b].duration=duration;});
+  const after=indices.map(index=>cloneTabValue(tabMeasures[index]));
+  const track=window.GuitarTool.scoreDocument.activeTrack(scoreDocument),voice=tabVoice;
+  const restore=snapshots=>{indices.forEach((index,i)=>{track.measures[index]=cloneTabValue(snapshots[i]);const measure=track.measures[index];measure.beats=measure.voices?.[voice]?.beats??measure.beats;});afterHistoryRestore();};
+  if(JSON.stringify(before)!==JSON.stringify(after))tabHistory.push({label:'批次變更音符時值',undo:()=>restore(before),redo:()=>restore(after)});
+  tabSelectedDur=duration;
   document.querySelectorAll('.dur-btn').forEach(button=>button.classList.toggle('active',button.dataset.dur===duration));
-  requestScoreRender();saveTabStore();setStatus('已變更音符時值');
+  requestScoreRender();saveTabStore();setStatus(`已變更 ${targets.length} 個節拍的時值`);
 }
 
 const tabContextMenu=document.getElementById('tabContextMenu');
 function closeTabContextMenu(){tabContextMenu.classList.remove('open');}
 function openTabContextMenu(event){
+  const oldSelection=selectedBeats;
   if(!selectScorePosition(event))return;
+  if(!oldSelection.some(item=>item.m===tabCursor.m&&item.b===tabCursor.b))selectedBeats=[];
+  drawCursorOverlay();
   event.preventDefault();tabContextMenu.replaceChildren();
   const beat=tabMeasures[tabCursor.m].beats[tabCursor.b];let grid;
   const addHeading=text=>{const heading=document.createElement('div');heading.className='menu-heading';heading.textContent=text;tabContextMenu.appendChild(heading);grid=document.createElement('div');grid.className='menu-grid';tabContextMenu.appendChild(grid);};
@@ -1387,7 +1410,37 @@ function openTabContextMenu(event){
   tabContextMenu.style.top=`${Math.max(0,Math.min(event.clientY,window.innerHeight-rect.height))}px`;
 }
 
-document.getElementById('scoreContainer').addEventListener('click',event=>{closeTabContextMenu();selectScorePosition(event);});
+const scoreContainer=document.getElementById('scoreContainer');
+let selectionDrag=null,suppressScoreClick=false;
+scoreContainer.addEventListener('pointerdown',event=>{
+  if(event.button!==0)return;
+  const svg=scoreContainer.querySelector('svg');if(!svg)return;
+  const bounds=svg.getBoundingClientRect();
+  selectionDrag={startX:event.clientX,startY:event.clientY,bounds,svgWidth:Number(svg.getAttribute('width'))||bounds.width,svgHeight:Number(svg.getAttribute('height'))||bounds.height,dragging:false};
+  scoreContainer.setPointerCapture(event.pointerId);
+});
+scoreContainer.addEventListener('pointermove',event=>{
+  if(!selectionDrag)return;
+  const drag=selectionDrag;if(Math.hypot(event.clientX-drag.startX,event.clientY-drag.startY)<5&&!drag.dragging)return;
+  drag.dragging=true;let box=document.getElementById('scoreSelectionBox');
+  if(!box){box=document.createElement('div');box.id='scoreSelectionBox';box.className='selection-box';document.body.appendChild(box);box.style.position='fixed';}
+  box.style.left=`${Math.min(drag.startX,event.clientX)}px`;box.style.top=`${Math.min(drag.startY,event.clientY)}px`;box.style.width=`${Math.abs(event.clientX-drag.startX)}px`;box.style.height=`${Math.abs(event.clientY-drag.startY)}px`;
+});
+function finishScoreSelection(event){
+  if(!selectionDrag)return;const drag=selectionDrag;selectionDrag=null;
+  document.getElementById('scoreSelectionBox')?.remove();
+  if(!drag.dragging)return;
+  suppressScoreClick=true;
+  setTimeout(()=>{suppressScoreClick=false;},0);
+  const x1=(Math.min(drag.startX,event.clientX)-drag.bounds.left)*drag.svgWidth/drag.bounds.width,x2=(Math.max(drag.startX,event.clientX)-drag.bounds.left)*drag.svgWidth/drag.bounds.width;
+  const y1=(Math.min(drag.startY,event.clientY)-drag.bounds.top)*drag.svgHeight/drag.bounds.height,y2=(Math.max(drag.startY,event.clientY)-drag.bounds.top)*drag.svgHeight/drag.bounds.height;
+  selectedBeats=_notePositions.filter(note=>{const ys=_staveStringYs[_measureLineIdx[note.mi]];return ys&&note.x>=x1&&note.x<=x2&&y1<=ys[5]+8&&y2>=ys[0]-8;}).map(note=>({m:note.mi,b:note.bi}));
+  if(selectedBeats.length){tabCursor.m=selectedBeats[0].m;tabCursor.b=selectedBeats[0].b;updateCursorUI();}
+  drawCursorOverlay();setStatus(selectedBeats.length?`已選取 ${selectedBeats.length} 個節拍；選擇時值即可批次修改`:'範圍內沒有音符');
+}
+scoreContainer.addEventListener('pointerup',finishScoreSelection);
+scoreContainer.addEventListener('pointercancel',()=>{selectionDrag=null;document.getElementById('scoreSelectionBox')?.remove();});
+scoreContainer.addEventListener('click',event=>{if(suppressScoreClick){suppressScoreClick=false;return;}closeTabContextMenu();selectedBeats=[];selectScorePosition(event);drawCursorOverlay();});
 document.getElementById('scoreContainer').addEventListener('contextmenu',openTabContextMenu);
 document.addEventListener('pointerdown',event=>{if(!tabContextMenu.contains(event.target))closeTabContextMenu();});
 document.addEventListener('keydown',event=>{if(event.key==='Escape')closeTabContextMenu();});

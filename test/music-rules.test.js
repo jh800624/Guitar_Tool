@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { analyseChord, noteName } from '../src/music/theory.js';
-import { beatDuration, canSetDuration, measureCapacity, measureDuration, validateTabDocument } from '../src/music/tab-model.js';
+import { beatDuration, canSetDuration, measureCapacity, measureDuration, validateDurationSelection, validateTabDocument } from '../src/music/tab-model.js';
 import { activeTrack, addTrack, createScoreDocument, migrateStoredTab, setActiveTrack, validateScoreDocument, voiceBeats } from '../src/music/score-document.js';
 import { createCommandHistory } from '../src/core/command-history.js';
 import { createDebouncedWriter } from '../src/core/debounced-writer.js';
@@ -173,4 +173,15 @@ test('a measure cannot exceed its time signature', () => {
   assert.equal(canSetDuration(measure, measure.beats[1], 'h'), false);
   assert.equal(validateTabDocument({ measures: [measure] }), true);
   assert.equal(canSetDuration({ timeSig: '4/4', beats: [{ duration: 'h' }, { duration: 'q' }] }, { duration: 'q' }, { duration: 'q', dots: 1 }), false);
+});
+
+test('batch duration validation checks all selected beats together across measures', () => {
+  const measures = [
+    { timeSig: '4/4', beats: [{ duration: 'q' }, { duration: 'q' }, { duration: 'q' }] },
+    { timeSig: '3/4', beats: [{ duration: 'q' }, { duration: 'q' }] },
+  ];
+  assert.equal(validateDurationSelection(measures, [{ m: 0, b: 0 }, { m: 0, b: 1 }], 'h'), false);
+  assert.equal(validateDurationSelection(measures, [{ m: 0, b: 0 }, { m: 1, b: 0 }], 'h'), true);
+  assert.equal(validateDurationSelection(measures, [{ m: 0, b: 0 }, { m: 1, b: 0 }], 'w'), false);
+  assert.equal(measures[0].beats[0].duration, 'q');
 });

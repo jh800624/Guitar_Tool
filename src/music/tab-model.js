@@ -23,6 +23,21 @@ export function canSetDuration(measure, beat, durationOrBeat) {
   return measureDuration(measure, beat) + beatDuration(proposedBeat) <= measureCapacity(measure.timeSig) + 0.001;
 }
 
+export function validateDurationSelection(measures, selections, duration) {
+  if (!Object.hasOwn(DURATIONS, duration) || !selections.length) return false;
+  const byMeasure = new Map();
+  for (const { m, b } of selections) {
+    if (!measures[m]?.beats?.[b]) return false;
+    if (!byMeasure.has(m)) byMeasure.set(m, new Set());
+    byMeasure.get(m).add(b);
+  }
+  return [...byMeasure].every(([m, indices]) => {
+    const measure = measures[m];
+    const total = measure.beats.reduce((sum, beat, index) => sum + beatDuration(indices.has(index) ? { ...beat, duration } : beat), 0);
+    return total <= measureCapacity(measure.timeSig) + 0.001;
+  });
+}
+
 export function nextFittingDuration(remaining) {
   return ['w', 'h', 'q', '8', '16'].find((duration) => DURATIONS[duration] <= remaining + 0.001) ?? null;
 }
