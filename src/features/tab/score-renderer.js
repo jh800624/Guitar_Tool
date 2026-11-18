@@ -10,23 +10,24 @@ export function createScoreRenderer({ vf, buildNotes, buildNotationNotes = () =>
   const { Renderer, Stave, TabStave, Voice, Formatter, Beam } = vf;
   const { maxWidth, lineHeight, clefWidth, marginWidth } = options;
 
-  function layout(measures) {
+  function layout(measures, availableWidth = maxWidth) {
+    const width = Math.max(200, availableWidth || maxWidth);
     const lines = [];
     let line = [], lineWidth = 0;
     measures.forEach((measure, measureIndex) => {
       const measureWidth = calcStaveWidth(measure, line.length === 0);
-      if (line.length && lineWidth + measureWidth > maxWidth) {
+      if (line.length && lineWidth + measureWidth > width) {
         lines.push(line); line = [measureIndex]; lineWidth = calcStaveWidth(measure, true);
       } else { line.push(measureIndex); lineWidth += measureWidth; }
     });
     if (line.length) lines.push(line);
     const measureLineIndex = {};
     lines.forEach((items, lineIndex) => items.forEach((measureIndex) => { measureLineIndex[measureIndex] = lineIndex; }));
-    return { lines, measureLineIndex, width: maxWidth, height: lines.length * lineHeight + 30 };
+    return { lines, measureLineIndex, width, height: lines.length * lineHeight + 30 };
   }
 
-  function render({ container, measures, cursor, activeVoice = 0 }) {
-    const scoreLayout = layout(measures);
+  function render({ container, measures, cursor, activeVoice = 0, availableWidth }) {
+    const scoreLayout = layout(measures, availableWidth);
     container.innerHTML = '';
     const renderer = new Renderer(container, Renderer.Backends.SVG);
     renderer.resize(scoreLayout.width, scoreLayout.height);

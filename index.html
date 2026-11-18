@@ -1251,7 +1251,9 @@ function renderScore(){
     calcStaveWidth:calcStaveW,
     options:{maxWidth:SCORE_W_MAX,lineHeight:LINE_H,clefWidth:CLEF_W,marginWidth:MARGIN_W}
   });
-  const layout=tabScoreRenderer.render({container:document.getElementById('scoreContainer'),measures:tabMeasures,cursor:tabCursor,activeVoice:tabVoice});
+  const wrap=document.querySelector('.score-wrap');
+  const availableWidth=Math.max(200,wrap.clientWidth-24);
+  const layout=tabScoreRenderer.render({container:document.getElementById('scoreContainer'),measures:tabMeasures,cursor:tabCursor,activeVoice:tabVoice,availableWidth});
   _notePositions=layout.notePositions.map(({measureIndex,beatIndex,x})=>({mi:measureIndex,bi:beatIndex,x}));
   _staveStringYs=layout.staveStringYs;
   _measureLineIdx=layout.measureLineIndex;
@@ -1567,7 +1569,11 @@ window.GuitarTool.bindTabKeyboard({
   technique:applyTechnique, undo:undoTabEdit, redo:redoTabEdit, status:setStatus
 });
 
-window.addEventListener('resize',drawCursorOverlay);
+window.addEventListener('resize',requestScoreRender);
+if(window.ResizeObserver){
+  let previousWidth=0;
+  new ResizeObserver(entries=>{const width=entries[0].contentRect.width;if(width>0&&Math.abs(width-previousWidth)>1){previousWidth=width;requestScoreRender();}}).observe(document.querySelector('.score-wrap'));
+}
 window.addEventListener('pagehide',()=>saveTabStore({flush:true}));
 
 /* ── Init ── */

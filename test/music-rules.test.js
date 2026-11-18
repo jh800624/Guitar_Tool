@@ -145,6 +145,7 @@ test('renderer layout wraps measures and records their line index without a brow
   const result = renderer.layout([{ beats: [] }, { beats: [] }, { beats: [] }]);
   assert.deepEqual(result.lines, [[0, 1], [2]]);
   assert.equal(result.measureLineIndex[2], 1);
+  assert.deepEqual(renderer.layout([{ beats: [] }, { beats: [] }, { beats: [] }], 260).lines, [[0, 1, 2]]);
 });
 
 test('score systems use identical widths for the measures that fit a line', () => {
