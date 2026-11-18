@@ -455,23 +455,23 @@
     <div class="sec">
       <div class="sec-title">吉他技巧</div>
       <div class="tech-grid">
-        <button class="tech-btn" data-tech="h">h<span>hammer</span></button>
-        <button class="tech-btn" data-tech="p">p<span>pull</span></button>
-        <button class="tech-btn" data-tech="slide_up">/<span>slide↑</span></button>
-        <button class="tech-btn" data-tech="slide_down">\<span>slide↓</span></button>
-        <button class="tech-btn" data-tech="bend">b<span>bend</span></button>
-        <button class="tech-btn" data-tech="release">r<span>release</span></button>
-        <button class="tech-btn" data-tech="harmonic">◇<span>harmonic</span></button>
-        <button class="tech-btn" data-tech="vibrato">~<span>vibrato</span></button>
-        <button class="tech-btn" data-tech="tapping">T<span>tapping</span></button>
-        <button class="tech-btn" data-tech="mute">x<span>mute</span></button>
-        <button class="tech-btn r" id="btnClearTech">清除<span>clear</span></button>
+        <button class="tech-btn" data-tech="h">h<span>擊弦</span></button>
+        <button class="tech-btn" data-tech="p">p<span>勾弦</span></button>
+        <button class="tech-btn" data-tech="slide_up">/<span>上滑音</span></button>
+        <button class="tech-btn" data-tech="slide_down">\<span>下滑音</span></button>
+        <button class="tech-btn" data-tech="bend">b<span>推弦</span></button>
+        <button class="tech-btn" data-tech="release">r<span>推弦回放</span></button>
+        <button class="tech-btn" data-tech="harmonic">◇<span>泛音</span></button>
+        <button class="tech-btn" data-tech="vibrato">~<span>揉弦</span></button>
+        <button class="tech-btn" data-tech="tapping">T<span>點弦</span></button>
+        <button class="tech-btn" data-tech="mute">x<span>悶音</span></button>
+        <button class="tech-btn r" id="btnClearTech">清除<span>技巧</span></button>
       </div>
       <div class="sec-title" style="margin-top:10px;margin-bottom:6px">可疊加效果</div>
       <div class="tbtn-row">
-        <button class="tbtn effect-btn" data-effect="palm_mute">P.M.</button>
-        <button class="tbtn effect-btn" data-effect="let_ring">Let ring</button>
-        <button class="tbtn effect-btn" data-effect="dead_note">Dead note</button>
+        <button class="tbtn effect-btn" data-effect="palm_mute">手掌悶音</button>
+        <button class="tbtn effect-btn" data-effect="let_ring">延音</button>
+        <button class="tbtn effect-btn" data-effect="dead_note">死音</button>
       </div>
     </div>
 
@@ -1026,6 +1026,8 @@ function updateCursorUI(){
 }
 function syncTechniqueUI(){
   const beat=tabMeasures[tabCursor.m].beats[tabCursor.b];
+  tabSelectedDur=beat.duration;
+  document.querySelectorAll('.dur-btn').forEach(button=>button.classList.toggle('active',button.dataset.dur===beat.duration));
   document.querySelectorAll('.tech-btn[data-tech]').forEach(button=>button.classList.toggle('active',button.dataset.tech===beat.technique));
   document.querySelectorAll('.effect-btn').forEach(button=>button.classList.toggle('active',(beat.effects||[]).includes(button.dataset.effect)));
 }
@@ -1093,7 +1095,7 @@ function applyTechnique(tech){
   } else {
     beat.technique=tech;
     document.querySelectorAll('.tech-btn[data-tech]').forEach(b=>b.classList.toggle('active',b.dataset.tech===tech));
-    const nm={h:'Hammer-on',p:'Pull-off',slide_up:'Slide Up',slide_down:'Slide Down',bend:'Bend',release:'Release',harmonic:'Harmonic',vibrato:'Vibrato',tapping:'Tapping',mute:'Mute'};
+    const nm={h:'擊弦',p:'勾弦',slide_up:'上滑音',slide_down:'下滑音',bend:'推弦',release:'推弦回放',harmonic:'泛音',vibrato:'揉弦',tapping:'點弦',mute:'悶音'};
     setStatus(`套用：${nm[tech]||tech}`);
   }
   finishTabEdit(tech===null?'清除技巧':'套用技巧');
@@ -1104,7 +1106,7 @@ function toggleEffect(effect){
   checkpointTabEdit();
   const effects=new Set(beat.effects||[]);effects.has(effect)?effects.delete(effect):effects.add(effect);beat.effects=[...effects];
   finishTabEdit(`切換 ${effect}`);document.querySelectorAll('.effect-btn').forEach(button=>button.classList.toggle('active',(beat.effects||[]).includes(button.dataset.effect)));
-  requestScoreRender();saveTabStore();setStatus(`已切換：${effect}`);
+  requestScoreRender();saveTabStore();setStatus(`已切換：${{palm_mute:'手掌悶音',let_ring:'延音',dead_note:'死音'}[effect]||effect}`);
 }
 function toggleRhythmField(field,value,label){
   const beat=tabMeasures[tabCursor.m].beats[tabCursor.b];
@@ -1374,10 +1376,10 @@ function openTabContextMenu(event){
   addItem('⌒','Tie',()=>toggleRhythmField('tie',true,'切換 Tie'),Boolean(beat.tie));
   addItem('³','三連音',()=>toggleRhythmField('tuplet',{actual:3,normal:2},'切換三連音'),beat.tuplet?.actual===3&&beat.tuplet?.normal===2);
   addHeading('吉他技巧');
-  [['H','Hammer-on','h'],['P','Pull-off','p'],['／','Slide 上行','slide_up'],['＼','Slide 下行','slide_down'],['b','Bend','bend'],['r','Release','release'],['◇','Harmonic','harmonic'],['∿','Vibrato','vibrato'],['T','Tapping','tapping'],['×','Mute','mute']].forEach(([icon,label,tech])=>addItem(icon,label,()=>applyTechnique(tech),beat.technique===tech));
+  [['H','擊弦','h'],['P','勾弦','p'],['／','上滑音','slide_up'],['＼','下滑音','slide_down'],['b','推弦','bend'],['r','推弦回放','release'],['◇','泛音','harmonic'],['∿','揉弦','vibrato'],['T','點弦','tapping'],['×','悶音','mute']].forEach(([icon,label,tech])=>addItem(icon,label,()=>applyTechnique(tech),beat.technique===tech));
   addItem('⌫','清除技巧',()=>applyTechnique(null));
   addHeading('可疊加效果');
-  [['P.M.','Palm mute','palm_mute'],['L.R.','Let ring','let_ring'],['×','Dead note','dead_note']].forEach(([icon,label,effect])=>addItem(icon,label,()=>toggleEffect(effect),(beat.effects||[]).includes(effect)));
+  [['P.M.','手掌悶音','palm_mute'],['L.R.','延音','let_ring'],['×','死音','dead_note']].forEach(([icon,label,effect])=>addItem(icon,label,()=>toggleEffect(effect),(beat.effects||[]).includes(effect)));
   tabContextMenu.appendChild(caption);
   tabContextMenu.classList.add('open');
   const rect=tabContextMenu.getBoundingClientRect();
@@ -1537,11 +1539,7 @@ function startPlayback(){
 
 /* ── UI Bindings ── */
 document.querySelectorAll('.dur-btn').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    tabSelectedDur=btn.dataset.dur;
-    document.querySelectorAll('.dur-btn').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-  });
+  btn.addEventListener('click',()=>setCurrentDuration(btn.dataset.dur));
 });
 document.querySelectorAll('.tech-btn[data-tech]').forEach(btn=>{
   btn.addEventListener('click',()=>applyTechnique(btn.dataset.tech));
