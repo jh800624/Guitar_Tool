@@ -1154,6 +1154,13 @@ const tabPersistence=window.GuitarTool.createDebouncedWriter(()=>{
 function saveTabStore({flush=false}={}){
   if(flush)tabPersistence.flush();else tabPersistence.schedule();
 }
+function isLegacyBlankSingleMeasure(measures){
+  if(measures.length!==1)return false;
+  const measure=measures[0],voices=measure.voices??[{beats:measure.beats??[]}];
+  if(voices.length!==1||voices[0].beats.length!==1)return false;
+  const beat=voices[0].beats[0];
+  return beat.duration==='q'&&!beat.isRest&&!(beat.strings||[]).length&&!beat.technique&&!(beat.effects||[]).length&&!beat.dots&&!beat.tie&&!beat.tuplet;
+}
 function loadTabStore(){
   try{
     const data=window.GuitarTool.storage.loadTab();
@@ -1165,6 +1172,10 @@ function loadTabStore(){
     document.getElementById('songKeySel').value=scoreDocument.metadata.key||'C';
     document.getElementById('bpmInput').value=scoreDocument.metadata.bpm||120;
     document.getElementById('timeSigSel').value=tabMeasures[0].timeSig;
+    if(isLegacyBlankSingleMeasure(tabMeasures)){
+      setTabMeasures(makeA4Template(tabMeasures[0].timeSig));
+      saveTabStore({flush:true});
+    }
   }catch(e){
     scoreDocument=window.GuitarTool.scoreDocument.createScoreDocument();
     tabMeasures=window.GuitarTool.scoreDocument.activeTrack(scoreDocument).measures;
